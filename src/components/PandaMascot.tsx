@@ -19,29 +19,37 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
         {/* Left Hand */}
         <motion.div
           animate={
-            state === 'happy' ? { rotate: [0, -20, 0], y: [0, -10, 0] } :
-            state === 'thinking' ? { x: 10, y: -5, rotate: -10 } :
-            state === 'stuck' || state === 'confused' ? { y: -25, x: 15, rotate: -40 } :
-            state === 'mad' ? { x: 5, y: 5, rotate: 20 } :
-            state === 'talking' ? { x: [0, -5, 0], rotate: [0, -10, 0] } :
+            state === 'happy' ? { rotate: [0, -40, 0], y: [0, -15, 0], x: [0, -5, 0] } :
+            state === 'thinking' ? { x: 15, y: -15, rotate: -20 } :
+            state === 'stuck' || state === 'confused' ? { y: -45, x: 25, rotate: -60 } : // Scratching head
+            state === 'mad' ? { x: 8, y: 0, rotate: 30 } :
+            state === 'talking' ? { x: [0, -8, 0], rotate: [0, -15, 0] } :
             { y: 0, x: 0, rotate: 0 }
           }
-          transition={{ duration: 0.5, repeat: state === 'happy' || state === 'talking' ? Infinity : 0 }}
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-6 h-8 bg-emerald-900 rounded-full z-0 shadow-sm"
+          transition={{ 
+            duration: state === 'happy' ? 0.4 : 0.6, 
+            repeat: state === 'happy' || state === 'talking' ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+          className="absolute left-4 top-[65%] w-7 h-9 bg-emerald-900 rounded-full z-20 shadow-md border-2 border-white/10"
         />
 
         {/* Right Hand */}
         <motion.div
           animate={
-            state === 'happy' ? { rotate: [0, 20, 0], y: [0, -10, 0] } :
-            state === 'thinking' ? { x: -25, y: -35, rotate: 45 } : // Hand to chin
-            state === 'stuck' || state === 'confused' ? { y: -25, x: -15, rotate: 40 } :
-            state === 'mad' ? { x: -5, y: 5, rotate: -20 } :
-            state === 'talking' ? { x: [0, 5, 0], rotate: [0, 10, 0] } :
+            state === 'happy' ? { rotate: [0, 40, 0], y: [0, -15, 0], x: [0, 5, 0] } :
+            state === 'thinking' ? { x: -28, y: -42, rotate: 45 } : // Hand to chin
+            state === 'stuck' || state === 'confused' ? { y: -45, x: -25, rotate: 60 } : // Scratching head
+            state === 'mad' ? { x: -8, y: 0, rotate: -30 } :
+            state === 'talking' ? { x: [0, 8, 0], rotate: [0, 15, 0] } :
             { y: 0, x: 0, rotate: 0 }
           }
-          transition={{ duration: 0.5, repeat: state === 'happy' || state === 'talking' ? Infinity : 0 }}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-8 bg-emerald-900 rounded-full z-20 shadow-sm"
+          transition={{ 
+            duration: state === 'happy' ? 0.4 : 0.6, 
+            repeat: state === 'happy' || state === 'talking' ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+          className="absolute right-4 top-[65%] w-7 h-9 bg-emerald-900 rounded-full z-20 shadow-md border-2 border-white/10"
         />
 
         <motion.div
@@ -152,10 +160,10 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            className="mt-4 bg-white p-4 rounded-2xl shadow-xl border border-emerald-100 max-w-[200px] relative"
+            className="mt-4 bg-white p-4 rounded-3xl shadow-2xl border-2 border-emerald-500/20 max-w-[220px] relative"
           >
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-t border-l border-emerald-100 rotate-45" />
-            <p className="text-sm text-emerald-900 font-medium leading-relaxed">
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-t-2 border-l-2 border-emerald-500/20 rotate-45" />
+            <p className="text-sm text-emerald-950 font-black leading-relaxed text-center">
               {message}
             </p>
           </motion.div>
