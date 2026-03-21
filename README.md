@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Bamboost Frontend (Next.js)
 
-# Run and deploy your AI Studio app
+This project uses Next.js App Router and is split into multiple pages:
 
-This contains everything you need to run your app locally.
+- `/onboard` for splash and username onboarding
+- `/home` for main menu challenge selection
+- `/challenge/[slug]` for the coding workspace
 
-View your app in AI Studio: https://ai.studio/apps/3fc5081e-b545-4a20-a82c-c6dba7152a22
+## Requirements
+
+- Node.js 20+
+
+## Environment Variables
+
+Create `.env.local` and set:
+
+`GEMINI_API_KEY=your_api_key`
+
+The Gemini key is consumed on server-side only through `src/app/api/hint/route.ts`.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
-
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Start development server:
    `npm run dev`
+3. Open:
+   `http://localhost:3000/onboard`
+
+## Build
+
+- Production build: `npm run build`
+- Start production server: `npm run start`
