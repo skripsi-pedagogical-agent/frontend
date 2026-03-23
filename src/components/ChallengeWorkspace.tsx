@@ -48,9 +48,15 @@ export function ChallengeWorkspace({
   onBack,
 }: ChallengeWorkspaceProps) {
   const [selectedTestCaseId, setSelectedTestCaseId] = useState<number>(1);
-  const selectedTestCase =
-    problem.testCases.find((tc) => tc.id === selectedTestCaseId) ||
-    problem.testCases[0];
+  const hasTestCases = problem.testCases.length > 0;
+  const selectedTestCase = problem.testCases.find(
+    (tc) => tc.id === selectedTestCaseId,
+  ) ||
+    problem.testCases[0] || {
+      id: 0,
+      input: "None",
+      expectedOutput: "No test case available.",
+    };
 
   const [consoleTab, setConsoleTab] = useState<"testcase" | "result">(
     "testcase",
@@ -83,7 +89,7 @@ export function ChallengeWorkspace({
 
   useEffect(() => {
     setCode(problem.starterCode);
-    setSelectedTestCaseId(1);
+    setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
     setLastResult(null);
     setConsoleTab("testcase");
@@ -276,10 +282,11 @@ export function ChallengeWorkspace({
 
         const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
         const expected = selectedTestCase.expectedOutput.trim();
-        const isCorrect =
-          problem.id === "fizzbuzz"
+        const isCorrect = hasTestCases
+          ? problem.id === "fizzbuzz"
             ? problem.validator(finalOutput)
-            : lastOutput === expected;
+            : lastOutput === expected
+          : finalOutput.length > 0;
 
         setLastResult({
           isCorrect,
@@ -473,23 +480,31 @@ export function ChallengeWorkspace({
               <h3 className="text-xs font-black uppercase tracking-widest text-emerald-700">
                 Examples
               </h3>
-              {problem.testCases.map((tc, index) => (
-                <div key={tc.id} className="space-y-2">
-                  <p className="text-[11px] font-black text-emerald-900">
-                    Example {index + 1}:
-                  </p>
-                  <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
-                    <p className="text-[10px] font-mono font-black">
-                      <span className="text-emerald-700">Input:</span>{" "}
-                      {tc.input}
+              {hasTestCases ? (
+                problem.testCases.map((tc, index) => (
+                  <div key={tc.id} className="space-y-2">
+                    <p className="text-[11px] font-black text-emerald-900">
+                      Example {index + 1}:
                     </p>
-                    <p className="text-[10px] font-mono font-black">
-                      <span className="text-emerald-700">Output:</span>{" "}
-                      {tc.expectedOutput}
-                    </p>
+                    <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
+                      <p className="text-[10px] font-mono font-black">
+                        <span className="text-emerald-700">Input:</span>{" "}
+                        {tc.input}
+                      </p>
+                      <p className="text-[10px] font-mono font-black">
+                        <span className="text-emerald-700">Output:</span>{" "}
+                        {tc.expectedOutput}
+                      </p>
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
+                  <p className="text-[11px] font-bold text-emerald-800">
+                    No example test cases provided for this challenge.
+                  </p>
                 </div>
-              ))}
+              )}
             </section>
           </div>
         </div>

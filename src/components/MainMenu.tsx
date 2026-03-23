@@ -9,6 +9,7 @@ interface Problem {
   description: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   category: string;
+  slug: string;
 }
 
 interface MainMenuProps {
@@ -85,7 +86,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ username, problems, onSelect
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                onClick={() => onSelectProblem(problem.id)}
+                onClick={() => onSelectProblem(problem.slug)}
                 className="group relative bg-white rounded-[2rem] p-8 text-left border border-emerald-100 hover:border-emerald-500 hover:shadow-2xl hover:shadow-emerald-100 transition-all active:scale-[0.98] flex flex-col h-full"
               >
                 <div className="flex-1 space-y-4">

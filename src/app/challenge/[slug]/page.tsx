@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChallengeWorkspace } from "@/src/components/ChallengeWorkspace";
-import { getProblemBySlug } from "@/src/lib/problems";
+import {
+  getProblemBySlug,
+  mapBackendProblemToFrontend,
+  type Problem,
+} from "@/src/lib/problems";
+import { fetchProblemsFromBackend } from "@/src/services/problemsService";
 
 const USERNAME_STORAGE_KEY = "bamboost.username";
 
@@ -11,24 +16,48 @@ export default function ChallengePage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const [username, setUsername] = useState("");
+  const [problem, setProblem] = useState<Problem | undefined>(undefined);
   const [isReady, setIsReady] = useState(false);
 
-  const problem = useMemo(() => {
-    if (!params?.slug) return undefined;
-    return getProblemBySlug(params.slug);
-  }, [params?.slug]);
-
   useEffect(() => {
-    const storedName = window.localStorage.getItem(USERNAME_STORAGE_KEY);
+    const initPage = async () => {
+      const storedName = window.localStorage.getItem(USERNAME_STORAGE_KEY);
 
-    if (!storedName) {
-      router.replace("/onboard");
-      return;
-    }
+      if (!storedName) {
+        router.replace("/onboard");
+        return;
+      }
 
-    setUsername(storedName);
-    setIsReady(true);
-  }, [router]);
+      setUsername(storedName);
+
+      if (!params?.slug) {
+        setProblem(undefined);
+        setIsReady(true);
+        return;
+      }
+
+      try {
+        const backendResponse = await fetchProblemsFromBackend();
+        const backendProblem = backendResponse.results.find(
+          (item) => item.slug === params.slug,
+        );
+
+        if (backendProblem) {
+          setProblem(mapBackendProblemToFrontend(backendProblem));
+        } else {
+          // Fallback to static list for local-only problems.
+          setProblem(getProblemBySlug(params.slug));
+        }
+      } catch {
+        // Fallback to static list when backend is unavailable.
+        setProblem(getProblemBySlug(params.slug));
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    void initPage();
+  }, [params?.slug, router]);
 
   if (!isReady) {
     return null;
