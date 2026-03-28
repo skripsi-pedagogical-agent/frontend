@@ -9,8 +9,7 @@ import {
   type Problem,
 } from "@/src/lib/problems";
 import { fetchProblemsFromBackend } from "@/src/services/problemsService";
-
-const USERNAME_STORAGE_KEY = "bamboost.username";
+import { getStoredAuthUser, isAuthenticated } from "@/src/services/authService";
 
 export default function ChallengePage() {
   const router = useRouter();
@@ -21,16 +20,20 @@ export default function ChallengePage() {
 
   useEffect(() => {
     const initPage = async () => {
-      const storedName = window.localStorage.getItem(USERNAME_STORAGE_KEY);
+      const slug = params?.slug;
 
-      if (!storedName) {
-        router.replace("/onboard");
+      if (!isAuthenticated()) {
+        const nextQuery = slug
+          ? `?next=${encodeURIComponent(`/challenge/${slug}`)}`
+          : "";
+        router.replace(`/onboard${nextQuery}`);
         return;
       }
 
-      setUsername(storedName);
+      const authUser = getStoredAuthUser();
+      setUsername(authUser?.name || authUser?.username || "User");
 
-      if (!params?.slug) {
+      if (!slug) {
         setProblem(undefined);
         setIsReady(true);
         return;
@@ -39,18 +42,18 @@ export default function ChallengePage() {
       try {
         const backendResponse = await fetchProblemsFromBackend();
         const backendProblem = backendResponse.results.find(
-          (item) => item.slug === params.slug,
+          (item) => item.slug === slug,
         );
 
         if (backendProblem) {
           setProblem(mapBackendProblemToFrontend(backendProblem));
         } else {
           // Fallback to static list for local-only problems.
-          setProblem(getProblemBySlug(params.slug));
+          setProblem(getProblemBySlug(slug));
         }
       } catch {
         // Fallback to static list when backend is unavailable.
-        setProblem(getProblemBySlug(params.slug));
+        setProblem(getProblemBySlug(slug));
       } finally {
         setIsReady(true);
       }

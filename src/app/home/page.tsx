@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { MainMenu } from "@/src/components/MainMenu";
 import { Problem, mapBackendProblemToFrontend } from "@/src/lib/problems";
 import { fetchProblemsFromBackend } from "@/src/services/problemsService";
-
-const USERNAME_STORAGE_KEY = "bamboost.username";
+import { getStoredAuthUser, isAuthenticated } from "@/src/services/authService";
 
 export default function HomePage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("Guest");
+  const [loggedIn, setLoggedIn] = useState(false);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,15 +19,9 @@ export default function HomePage() {
   useEffect(() => {
     const initPage = async () => {
       try {
-        // Check username from localStorage
-        const storedName = window.localStorage.getItem(USERNAME_STORAGE_KEY);
-
-        if (!storedName) {
-          router.replace("/onboard");
-          return;
-        }
-
-        setUsername(storedName);
+        const authUser = getStoredAuthUser();
+        setLoggedIn(isAuthenticated());
+        setUsername(authUser?.name || authUser?.username || "Guest");
 
         // Fetch problems from backend
         try {
@@ -58,6 +52,15 @@ export default function HomePage() {
     router.push(`/challenge/${problemId}`);
   };
 
+  const handleAuthAction = () => {
+    if (loggedIn) {
+      router.push("/logout");
+      return;
+    }
+
+    router.push("/onboard");
+  };
+
   if (!isReady || isLoading) {
     return null;
   }
@@ -84,6 +87,8 @@ export default function HomePage() {
   return (
     <MainMenu
       username={username}
+      isLoggedIn={loggedIn}
+      onAuthAction={handleAuthAction}
       problems={problems}
       onSelectProblem={handleSelectProblem}
     />

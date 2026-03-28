@@ -71,17 +71,62 @@ export interface RunTestCaseResponse {
   judge_result: SubmissionJudgeResult;
 }
 
+import { getAccessToken, refreshAccessToken } from "@/src/services/authService";
+
 const BACKEND_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+function mergeHeaders(base: HeadersInit, extra?: HeadersInit): HeadersInit {
+  return {
+    ...(base as Record<string, string>),
+    ...(extra as Record<string, string>),
+  };
+}
+
+async function authorizedFetch(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const defaultHeaders: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  const accessToken = getAccessToken();
+
+  const firstResponse = await fetch(url, {
+    ...init,
+    headers: mergeHeaders(defaultHeaders, {
+      ...((init.headers as Record<string, string>) || {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    }),
+  });
+
+  if (firstResponse.status !== 401) {
+    return firstResponse;
+  }
+
+  const newAccessToken = await refreshAccessToken();
+  if (!newAccessToken) {
+    return firstResponse;
+  }
+
+  return fetch(url, {
+    ...init,
+    headers: mergeHeaders(defaultHeaders, {
+      ...((init.headers as Record<string, string>) || {}),
+      Authorization: `Bearer ${newAccessToken}`,
+    }),
+  });
+}
+
 export async function fetchProblemsFromBackend(): Promise<BackendProblemsResponse> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/problems/`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await authorizedFetch(
+      `${BACKEND_BASE_URL}/api/problems/`,
+      {
+        method: "GET",
       },
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to fetch problems: ${response.status}`);
@@ -99,11 +144,8 @@ export async function submitProblemToBackend(
   payload: SubmitProblemRequest,
 ): Promise<SubmissionResponse> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/submit/`, {
+    const response = await authorizedFetch(`${BACKEND_BASE_URL}/api/submit/`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(payload),
     });
 
@@ -123,13 +165,13 @@ export async function runTestCaseOnBackend(
   payload: RunTestCaseRequest,
 ): Promise<RunTestCaseResponse> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/run-testcase/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await authorizedFetch(
+      `${BACKEND_BASE_URL}/api/run-testcase/`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to run test case: ${response.status}`);

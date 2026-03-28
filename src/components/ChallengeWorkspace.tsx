@@ -23,10 +23,14 @@ import {
   submitProblemToBackend,
 } from "@/src/services/problemsService";
 import type { Problem } from "@/src/lib/problems";
+import { getStoredAuthUser } from "@/src/services/authService";
+import {
+  getAgentChatHistory,
+  sendAgentChatMessage,
+  triggerAgentSystemIntervention,
+} from "@/src/services/agentService";
 // @ts-ignore
 import Sk from "skulpt";
-
-const HARDCODED_USER_ID = "aaaaaaaa-0000-4000-a000-000000000001";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -103,7 +107,15 @@ export function ChallengeWorkspace({
   const [idleTime, setIdleTime] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
   const [deletionCount, setDeletionCount] = useState(0);
+  const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
+  const [hasTriggeredSystemIntervention, setHasTriggeredSystemIntervention] =
+    useState(false);
   const lastCodeLength = useRef(code.length);
+
+  const isBackendProblem =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      problem.id,
+    );
 
   useEffect(() => {
     setCode(problem.starterCode);
@@ -118,10 +130,66 @@ export function ChallengeWorkspace({
     setIdleTime(0);
     setErrorCount(0);
     setDeletionCount(0);
+    setIsHistoryLoaded(false);
+    setHasTriggeredSystemIntervention(false);
     lastCodeLength.current = problem.starterCode.length;
   }, [problem]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    const loadHistory = async () => {
+      if (!isBackendProblem) {
+        setIsHistoryLoaded(true);
+        return;
+      }
+
+      const authUser = getStoredAuthUser();
+      if (!authUser?.id) {
+        setIsHistoryLoaded(true);
+        return;
+      }
+
+      try {
+        const history = await getAgentChatHistory(problem.id, authUser.id);
+
+        if (isCancelled) return;
+
+        const mappedHistory: Message[] = history.map((item) => ({
+          id: item.id,
+          role: item.sender === "USER" ? "user" : "assistant",
+          content: item.message,
+          type: "observational",
+          timestamp: new Date(item.created_at),
+        }));
+
+        setChatMessages(mappedHistory);
+
+        if (mappedHistory.length > 0) {
+          setIsChatOpen(true);
+          setHasClickedMascot(true);
+        }
+      } catch (error) {
+        console.error("Failed to load chat history:", error);
+      } finally {
+        if (!isCancelled) {
+          setIsHistoryLoaded(true);
+        }
+      }
+    };
+
+    void loadHistory();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isBackendProblem, problem.id]);
+
+  useEffect(() => {
+    if (!isHistoryLoaded) {
+      return;
+    }
+
     if (chatMessages.length === 0 && !agentMessage) {
       const welcomes = [
         `Hey ${username}! Ready to crush this problem? I'm your panda-tutor, Bamboost!`,
@@ -140,7 +208,7 @@ export function ChallengeWorkspace({
     }
 
     return undefined;
-  }, [chatMessages.length, agentMessage, username]);
+  }, [chatMessages.length, agentMessage, isHistoryLoaded, username]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -162,34 +230,76 @@ export function ChallengeWorkspace({
   useEffect(() => {
     const isIdle = idleTime >= 90;
     const isErrorProne = errorCount >= 3;
-    const isDeletingTooMuch = deletionCount > problem.starterCode.length * 0.4;
 
     const triggerHint = async () => {
       if (
-        (isIdle || isErrorProne || isDeletingTooMuch) &&
+        (isIdle || isErrorProne) &&
         !isChatOpen &&
-        chatMessages.length === 0
+        chatMessages.length === 0 &&
+        !hasTriggeredSystemIntervention
       ) {
         setAgentState("stuck");
         setAgentMessage(
           `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
         );
 
-        setIsTyping(true);
-        const aiHint = await getPedagogicalHint(problem.description, code);
-        setIsTyping(false);
+        setHasTriggeredSystemIntervention(true);
 
-        const newMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: aiHint.hint,
-          type: "observational",
-          timestamp: new Date(),
-        };
+        try {
+          if (isBackendProblem) {
+            const authUser = getStoredAuthUser();
 
-        setChatMessages([newMessage]);
-        setIsChatOpen(true);
-        setAgentState("talking");
+            if (authUser?.id) {
+              const triggerType = isIdle ? "inactivity" : "error_burst";
+              const triggerPayload = isIdle
+                ? { idle_seconds: idleTime }
+                : { error_count: errorCount };
+
+              const response = await triggerAgentSystemIntervention({
+                user_id: authUser.id,
+                problem_id: problem.id,
+                current_user_code: code,
+                trigger_type: triggerType,
+                trigger_payload: triggerPayload,
+              });
+
+              const newMessage: Message = {
+                id: response.ai_message.id,
+                role: "assistant",
+                content: response.ai_message.message,
+                type: "observational",
+                timestamp: new Date(response.ai_message.created_at),
+              };
+
+              setChatMessages([newMessage]);
+              setIsChatOpen(true);
+              setHasClickedMascot(true);
+              setAgentState("talking");
+              return;
+            }
+          }
+
+          setIsTyping(true);
+          const aiHint = await getPedagogicalHint(problem.description, code);
+          setIsTyping(false);
+
+          const fallbackMessage: Message = {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: aiHint.hint,
+            type: "observational",
+            timestamp: new Date(),
+          };
+
+          setChatMessages([fallbackMessage]);
+          setIsChatOpen(true);
+          setHasClickedMascot(true);
+          setAgentState("talking");
+        } catch {
+          setIsTyping(false);
+          setAgentState("sad");
+          setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
+        }
       }
     };
 
@@ -199,12 +309,13 @@ export function ChallengeWorkspace({
   }, [
     chatMessages.length,
     code,
-    deletionCount,
     errorCount,
+    hasTriggeredSystemIntervention,
     idleTime,
+    isBackendProblem,
     isChatOpen,
+    problem.id,
     problem.description,
-    problem.starterCode.length,
     username,
   ]);
 
@@ -479,8 +590,13 @@ export function ChallengeWorkspace({
     setOutput([]);
 
     try {
+      const authUser = getStoredAuthUser();
+      if (!authUser?.id) {
+        throw new Error("Sesi login tidak ditemukan. Silakan login ulang.");
+      }
+
       const submission = await submitProblemToBackend({
-        user_id: HARDCODED_USER_ID,
+        user_id: authUser.id,
         problem_id: problem.id,
         source_code: code,
       });
@@ -566,31 +682,75 @@ export function ChallengeWorkspace({
   };
 
   const handleSendMessage = async (content: string) => {
-    const userMessage: Message = {
+    const optimisticUserMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content,
       timestamp: new Date(),
     };
 
-    setChatMessages((prev) => [...prev, userMessage]);
+    setChatMessages((prev) => [...prev, optimisticUserMessage]);
     setIsTyping(true);
     setAgentState("thinking");
 
-    const aiHint = await getPedagogicalHint(problem.description, code, content);
+    try {
+      if (isBackendProblem) {
+        const authUser = getStoredAuthUser();
 
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: "assistant",
-      content: aiHint.hint,
-      type: aiHint.type,
-      timestamp: new Date(),
-    };
+        if (authUser?.id) {
+          const response = await sendAgentChatMessage(problem.id, authUser.id, {
+            sender: "USER",
+            message: content,
+            current_user_code: code,
+          });
 
-    setChatMessages((prev) => [...prev, assistantMessage]);
-    setIsTyping(false);
-    setAgentState("talking");
-    setAgentMessage(aiHint.hint);
+          const assistantMessage: Message = {
+            id: response.ai_message.id,
+            role: "assistant",
+            content: response.ai_message.message,
+            type: "observational",
+            timestamp: new Date(response.ai_message.created_at),
+          };
+
+          setChatMessages((prev) => [...prev, assistantMessage]);
+          setAgentState("talking");
+          setAgentMessage(response.ai_message.message);
+          return;
+        }
+      }
+
+      const aiHint = await getPedagogicalHint(
+        problem.description,
+        code,
+        content,
+      );
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: aiHint.hint,
+        type: aiHint.type,
+        timestamp: new Date(),
+      };
+
+      setChatMessages((prev) => [...prev, assistantMessage]);
+      setAgentState("talking");
+      setAgentMessage(aiHint.hint);
+    } catch {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Maaf, aku gagal menghubungi agent backend. Coba lagi ya.",
+        type: "observational",
+        timestamp: new Date(),
+      };
+
+      setChatMessages((prev) => [...prev, assistantMessage]);
+      setAgentState("sad");
+      setAgentMessage(assistantMessage.content);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const startResizing = useCallback((e: React.MouseEvent) => {
