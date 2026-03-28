@@ -7,6 +7,11 @@ export interface BackendProblem {
   method_name: string;
   starter_code: string;
   topic: string;
+  test_cases: {
+    id: string;
+    input_data: string;
+    expected_output: string;
+  }[];
   created_at: string;
   updated_at: string;
 }
@@ -16,6 +21,54 @@ export interface BackendProblemsResponse {
   next: string | null;
   previous: string | null;
   results: BackendProblem[];
+}
+
+export interface SubmitProblemRequest {
+  user_id: string;
+  problem_id: string;
+  source_code: string;
+}
+
+export interface RunTestCaseRequest {
+  problem_id: string;
+  source_code: string;
+}
+
+export interface SubmissionJudgeResultItem {
+  status: string;
+  message: string;
+  output: string | null;
+  expected: string | null;
+  error: string | null;
+  time_used: number | null;
+  memory_used: number | null;
+  test_case_id: string;
+}
+
+export interface SubmissionJudgeResult {
+  overall_status: string;
+  overall_message: string;
+  max_time: number;
+  max_memory: number;
+  results: SubmissionJudgeResultItem[];
+}
+
+export interface SubmissionResponse {
+  id: string;
+  user: string;
+  problem: string;
+  submission_number: number;
+  source_code: string;
+  verdict: string;
+  output: string;
+  execution_time: number;
+  memory_used: number;
+  created_at: string;
+  judge_result: SubmissionJudgeResult;
+}
+
+export interface RunTestCaseResponse {
+  judge_result: SubmissionJudgeResult;
 }
 
 const BACKEND_BASE_URL =
@@ -38,6 +91,54 @@ export async function fetchProblemsFromBackend(): Promise<BackendProblemsRespons
     return data;
   } catch (error) {
     console.error("Error fetching problems from backend:", error);
+    throw error;
+  }
+}
+
+export async function submitProblemToBackend(
+  payload: SubmitProblemRequest,
+): Promise<SubmissionResponse> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/submit/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to submit problem: ${response.status}`);
+    }
+
+    const data = (await response.json()) as SubmissionResponse;
+    return data;
+  } catch (error) {
+    console.error("Error submitting problem to backend:", error);
+    throw error;
+  }
+}
+
+export async function runTestCaseOnBackend(
+  payload: RunTestCaseRequest,
+): Promise<RunTestCaseResponse> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/run-testcase/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to run test case: ${response.status}`);
+    }
+
+    const data = (await response.json()) as RunTestCaseResponse;
+    return data;
+  } catch (error) {
+    console.error("Error running test case on backend:", error);
     throw error;
   }
 }

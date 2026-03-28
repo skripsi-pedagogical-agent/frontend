@@ -18,9 +18,15 @@ import { ChatBot, type Message } from "@/src/components/ChatBot";
 import { CodeEditor } from "@/src/components/CodeEditor";
 import { PandaMascot } from "@/src/components/PandaMascot";
 import { getPedagogicalHint } from "@/src/services/geminiService";
+import {
+  runTestCaseOnBackend,
+  submitProblemToBackend,
+} from "@/src/services/problemsService";
 import type { Problem } from "@/src/lib/problems";
 // @ts-ignore
 import Sk from "skulpt";
+
+const HARDCODED_USER_ID = "aaaaaaaa-0000-4000-a000-000000000001";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -66,7 +72,19 @@ export function ChallengeWorkspace({
     output: string[];
     runtime: number;
     status: "Accepted" | "Wrong Answer" | "Error";
+    judgeResults?: Array<{
+      status: string;
+      message: string;
+      output: string;
+      expected: string;
+      error: string | null;
+      time_used: number;
+      memory_used: number;
+      test_case_id: string;
+    }>;
   } | null>(null);
+  const [selectedResultTestCaseIndex, setSelectedResultTestCaseIndex] =
+    useState(0);
   const [consoleHeight, setConsoleHeight] = useState(256);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -92,6 +110,7 @@ export function ChallengeWorkspace({
     setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
     setLastResult(null);
+    setSelectedResultTestCaseIndex(0);
     setConsoleTab("testcase");
     setAgentMessage(null);
     setAgentState("idle");
@@ -211,6 +230,115 @@ export function ChallengeWorkspace({
   };
 
   const runCode = (testCaseInput?: string) => {
+    const isBackendProblem =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        problem.id,
+      );
+
+    if (isBackendProblem) {
+      setIsRunning(true);
+      setAgentState("thinking");
+      setOutput([]);
+
+      void (async () => {
+        try {
+          const response = await runTestCaseOnBackend({
+            problem_id: problem.id,
+            source_code: code,
+          });
+
+          const judgeResults = response.judge_result.results.map((result) => ({
+            status: result.status,
+            message: result.message,
+            output: result.output ?? "",
+            expected: result.expected ?? "",
+            error: result.error,
+            time_used: result.time_used ?? 0,
+            memory_used: result.memory_used ?? 0,
+            test_case_id: result.test_case_id,
+          }));
+          const passedCount = judgeResults.filter(
+            (result) => result.status === "AC",
+          ).length;
+          const isAccepted = response.judge_result.overall_status === "AC";
+          const isExecutionError = ["CE", "RE", "ERROR"].includes(
+            response.judge_result.overall_status,
+          );
+
+          const finalOutput =
+            judgeResults.length > 0
+              ? judgeResults
+                  .map((result, index) => {
+                    const lines = [
+                      `Case ${index + 1}: ${result.message}`,
+                      result.error
+                        ? `Error: ${result.error}`
+                        : `Output: ${result.output || "No output"}`,
+                    ];
+                    return lines.join("\n");
+                  })
+                  .slice(0, 3)
+              : [
+                  response.judge_result.overall_message ||
+                    "Run testcase completed with no detailed output.",
+                ];
+
+          setSelectedResultTestCaseIndex(0);
+          setOutput(finalOutput);
+          setLastResult({
+            isCorrect: isAccepted,
+            output: finalOutput,
+            runtime: response.judge_result.max_time,
+            status: isAccepted
+              ? "Accepted"
+              : isExecutionError
+                ? "Error"
+                : "Wrong Answer",
+            judgeResults,
+          });
+          setConsoleTab("result");
+
+          if (isAccepted) {
+            setAgentState("happy");
+            setAgentMessage(
+              `Nice ${username}! Semua ${passedCount} test case lulus saat run testcase.`,
+            );
+          } else if (isExecutionError) {
+            setAgentState("sad");
+            setAgentMessage(
+              "Masih ada error saat run testcase. Cek detail error di panel hasil.",
+            );
+            setErrorCount((prev) => prev + 1);
+          } else {
+            setAgentState("talking");
+            setAgentMessage(
+              `Baru ${passedCount}/${judgeResults.length} test case yang lulus. Yuk cek case yang gagal.`,
+            );
+          }
+        } catch (err: unknown) {
+          const errorMessage = String(err);
+          const finalOutput = [`Run testcase error: ${errorMessage}`];
+          setOutput(finalOutput);
+          setLastResult({
+            isCorrect: false,
+            output: finalOutput,
+            runtime: 0,
+            status: "Error",
+          });
+          setConsoleTab("result");
+          setAgentState("mad");
+          setAgentMessage(
+            "Gagal menjalankan run testcase ke backend. Coba lagi.",
+          );
+          setErrorCount((prev) => prev + 1);
+        } finally {
+          setIsRunning(false);
+        }
+      })();
+
+      return;
+    }
+
     setIsRunning(true);
     setAgentState("thinking");
     setOutput([]);
@@ -333,6 +461,108 @@ export function ChallengeWorkspace({
         setErrorCount((prev) => prev + 1);
       },
     );
+  };
+
+  const submitCode = async () => {
+    const isBackendProblem =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        problem.id,
+      );
+
+    if (!isBackendProblem) {
+      runCode();
+      return;
+    }
+
+    setIsRunning(true);
+    setAgentState("thinking");
+    setOutput([]);
+
+    try {
+      const submission = await submitProblemToBackend({
+        user_id: HARDCODED_USER_ID,
+        problem_id: problem.id,
+        source_code: code,
+      });
+
+      const firstJudgeResult = submission.judge_result.results[0];
+      const isAccepted = submission.verdict === "AC";
+      const isExecutionError =
+        submission.verdict === "CE" || submission.verdict === "RE";
+
+      const outputLines = [
+        submission.output,
+        submission.judge_result.overall_message,
+        firstJudgeResult?.output,
+        firstJudgeResult?.error,
+      ].filter((line): line is string =>
+        Boolean(line && line.trim().length > 0),
+      );
+
+      const finalOutput =
+        outputLines.length > 0
+          ? outputLines
+          : ["Submission processed, but no output was returned by backend."];
+
+      const judgeResults = submission.judge_result.results.map((result) => ({
+        status: result.status,
+        message: result.message,
+        output: result.output ?? "",
+        expected: result.expected ?? "",
+        error: result.error,
+        time_used: result.time_used ?? 0,
+        memory_used: result.memory_used ?? 0,
+        test_case_id: result.test_case_id,
+      }));
+
+      setSelectedResultTestCaseIndex(0);
+      setOutput(finalOutput);
+      setLastResult({
+        isCorrect: isAccepted,
+        output: finalOutput,
+        runtime: submission.execution_time,
+        status: isAccepted
+          ? "Accepted"
+          : isExecutionError
+            ? "Error"
+            : "Wrong Answer",
+        judgeResults,
+      });
+      setConsoleTab("result");
+
+      if (isAccepted) {
+        setAgentState("happy");
+        setAgentMessage(
+          `Excellent ${username}! Solusi kamu lolos semua test case di backend.`,
+        );
+      } else if (isExecutionError) {
+        setAgentState("sad");
+        setAgentMessage(
+          "Masih ada error saat submit. Cek pesan error di panel hasil ya.",
+        );
+      } else {
+        setAgentState("talking");
+        setAgentMessage(
+          "Belum accepted. Bandingkan output dan expected lalu perbaiki pelan-pelan.",
+        );
+      }
+    } catch (err: unknown) {
+      const errorMessage = String(err);
+      const finalOutput = [`Submit error: ${errorMessage}`];
+      setOutput(finalOutput);
+      setLastResult({
+        isCorrect: false,
+        output: finalOutput,
+        runtime: 0,
+        status: "Error",
+      });
+      setConsoleTab("result");
+      setAgentState("mad");
+      setAgentMessage("Gagal mengirim submit ke backend. Coba lagi sebentar.");
+      setErrorCount((prev) => prev + 1);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const handleSendMessage = async (content: string) => {
@@ -528,7 +758,7 @@ export function ChallengeWorkspace({
                 Run Test Case
               </button>
               <button
-                onClick={() => runCode()}
+                onClick={() => void submitCode()}
                 disabled={isRunning}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
                 type="button"
@@ -635,6 +865,144 @@ export function ChallengeWorkspace({
                       <p className="text-xs font-bold text-emerald-700 italic">
                         Run your code to see the results...
                       </p>
+                    </div>
+                  ) : lastResult.judgeResults ? (
+                    <div className="space-y-4">
+                      {/* Overall Summary */}
+                      <div className="border-b border-emerald-900/20 pb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={cn(
+                                "text-lg font-black uppercase tracking-tighter",
+                                lastResult.status === "Accepted"
+                                  ? "text-emerald-400"
+                                  : "text-red-400",
+                              )}
+                            >
+                              {lastResult.status}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
+                              {lastResult.judgeResults.length > 0 &&
+                                `${lastResult.judgeResults.filter((r) => r.status === "AC").length}/${lastResult.judgeResults.length} Passed`}
+                            </span>
+                          </div>
+                          {lastResult.status === "Accepted" ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <AlertCircle className="w-5 h-5 text-red-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Test Cases List */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
+                          Test Cases
+                        </label>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                          {lastResult.judgeResults.map((result, index) => (
+                            <button
+                              key={result.test_case_id}
+                              onClick={() =>
+                                setSelectedResultTestCaseIndex(index)
+                              }
+                              className={cn(
+                                "w-full p-3 rounded-lg text-left transition-all border",
+                                selectedResultTestCaseIndex === index
+                                  ? "bg-emerald-900/40 border-emerald-600/50"
+                                  : "bg-[#050d0a] border-emerald-900/20 hover:border-emerald-900/40",
+                              )}
+                              type="button"
+                            >
+                              <div className="flex items-center gap-3">
+                                {result.status === "AC" ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                ) : (
+                                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                )}
+                                <div className="flex-1">
+                                  <div className="text-xs font-bold text-emerald-100">
+                                    Case {index + 1}
+                                  </div>
+                                  <div
+                                    className={cn(
+                                      "text-[10px] font-semibold",
+                                      result.status === "AC"
+                                        ? "text-emerald-400"
+                                        : "text-red-400",
+                                    )}
+                                  >
+                                    {result.message}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <div className="text-[9px] text-emerald-600 font-bold">
+                                    {result.time_used}ms
+                                  </div>
+                                  <div className="text-[9px] text-emerald-600">
+                                    {(result.memory_used * 1024).toFixed(1)}
+                                    KB
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Selected Test Case Details */}
+                      {lastResult.judgeResults[selectedResultTestCaseIndex] && (
+                        <div className="border-t border-emerald-900/20 pt-4 space-y-3">
+                          {lastResult.judgeResults[selectedResultTestCaseIndex]
+                            .error ? (
+                            <div>
+                              <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
+                                Error
+                              </label>
+                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-[150px] overflow-y-auto custom-scrollbar">
+                                {
+                                  lastResult.judgeResults[
+                                    selectedResultTestCaseIndex
+                                  ].error
+                                }
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                                  Your Output
+                                </label>
+                                <div
+                                  className={cn(
+                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar",
+                                    lastResult.judgeResults[
+                                      selectedResultTestCaseIndex
+                                    ].status === "AC"
+                                      ? "border-emerald-900/30 text-emerald-100"
+                                      : "border-red-900/30 text-red-100 bg-red-950/10",
+                                  )}
+                                >
+                                  {lastResult.judgeResults[
+                                    selectedResultTestCaseIndex
+                                  ].output || "No output"}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                                  Expected Output
+                                </label>
+                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar">
+                                  {lastResult.judgeResults[
+                                    selectedResultTestCaseIndex
+                                  ].expected || "No expected output"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-5">

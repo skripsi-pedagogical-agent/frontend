@@ -143,6 +143,11 @@ export function mapBackendProblemToFrontend(backendProblem: {
   starter_code: string;
   topic: string;
   slug: string;
+  test_cases?: Array<{
+    id: string;
+    input_data: string;
+    expected_output: string;
+  }>;
 }): Problem {
   // Convert difficulty format from EASY/MEDIUM/HARD to Easy/Medium/Hard
   const difficultyMap: Record<string, "Easy" | "Medium" | "Hard"> = {
@@ -159,7 +164,14 @@ export function mapBackendProblemToFrontend(backendProblem: {
     description: backendProblem.description,
     starterCode: backendProblem.starter_code,
     slug: backendProblem.slug,
-    testCases: DEFAULT_BACKEND_TEST_CASES,
+    testCases:
+      backendProblem.test_cases && backendProblem.test_cases.length > 0
+        ? backendProblem.test_cases.map((testCase, index) => ({
+            id: index + 1,
+            input: testCase.input_data,
+            expectedOutput: testCase.expected_output,
+          }))
+        : DEFAULT_BACKEND_TEST_CASES,
     validator: () => true, // Placeholder validator - actual validation happens on backend
   };
 }
