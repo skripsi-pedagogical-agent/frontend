@@ -21,6 +21,7 @@ interface ChatBotProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
   isTyping?: boolean;
+  disabled?: boolean;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   isMinimized: boolean;
@@ -41,6 +42,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   messages,
   onSendMessage,
   isTyping,
+  disabled = false,
   isOpen,
   setIsOpen,
   isMinimized,
@@ -59,6 +61,10 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (disabled) {
+      return;
+    }
+
     if (input.trim() && !isTyping) {
       onSendMessage(input.trim());
       setInput("");
@@ -260,12 +266,17 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Bamboost for a hint..."
+                placeholder={
+                  disabled
+                    ? "Challenge completed. Click Reattempt to chat again."
+                    : "Ask Bamboost for a hint..."
+                }
+                disabled={disabled}
                 className="w-full bg-white border border-emerald-400/50 rounded-2xl py-3.5 pl-5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all placeholder:text-emerald-600/50 font-black text-emerald-950"
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isTyping}
+                disabled={disabled || !input.trim() || isTyping}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-emerald-800 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-800 transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
               >
                 <Send className="w-4 h-4" />

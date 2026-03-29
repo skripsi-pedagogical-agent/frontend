@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChallengeWorkspace } from "@/src/components/ChallengeWorkspace";
-import {
-  getProblemBySlug,
-  mapBackendProblemToFrontend,
-  type Problem,
-} from "@/src/lib/problems";
+import { mapBackendProblemToFrontend, type Problem } from "@/src/lib/problems";
 import { fetchProblemsFromBackend } from "@/src/services/problemsService";
 import { getStoredAuthUser, isAuthenticated } from "@/src/services/authService";
 
@@ -48,12 +44,10 @@ export default function ChallengePage() {
         if (backendProblem) {
           setProblem(mapBackendProblemToFrontend(backendProblem));
         } else {
-          // Fallback to static list for local-only problems.
-          setProblem(getProblemBySlug(slug));
+          setProblem(undefined);
         }
       } catch {
-        // Fallback to static list when backend is unavailable.
-        setProblem(getProblemBySlug(slug));
+        setProblem(undefined);
       } finally {
         setIsReady(true);
       }

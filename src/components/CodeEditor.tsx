@@ -1,17 +1,23 @@
-import React from 'react';
-import Editor from '@monaco-editor/react';
+import React from "react";
+import Editor from "@monaco-editor/react";
 
 interface CodeEditorProps {
   code: string;
   onChange: (value: string | undefined) => void;
   language?: string;
+  readOnly?: boolean;
 }
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, language = 'python' }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({
+  code,
+  onChange,
+  language = "python",
+  readOnly = false,
+}) => {
   return (
-    <div 
+    <div
       className="w-full h-full rounded-xl overflow-hidden border border-emerald-100 shadow-sm bg-[#1e1e1e]"
-      style={{ contain: 'strict' }}
+      style={{ contain: "strict" }}
     >
       <Editor
         height="100%"
@@ -23,18 +29,18 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, language
           minimap: { enabled: false },
           fontSize: 14,
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          lineNumbers: 'on',
+          lineNumbers: "on",
           roundedSelection: true,
           scrollBeyondLastLine: false,
-          readOnly: false,
+          readOnly,
           automaticLayout: true,
           padding: { top: 16, bottom: 16 },
-          cursorBlinking: 'smooth',
+          cursorBlinking: "smooth",
           smoothScrolling: true,
           contextmenu: true,
           scrollbar: {
-            vertical: 'visible',
-            horizontal: 'visible',
+            vertical: "visible",
+            horizontal: "visible",
             useShadows: false,
             verticalScrollbarSize: 10,
             horizontalScrollbarSize: 10,

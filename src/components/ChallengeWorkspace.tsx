@@ -10,6 +10,7 @@ import {
   HelpCircle,
   MessageSquare,
   Play,
+  RotateCcw,
   Terminal as TerminalIcon,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
@@ -114,6 +115,7 @@ export function ChallengeWorkspace({
   const [deletionCount, setDeletionCount] = useState(0);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [isEditorSessionLoaded, setIsEditorSessionLoaded] = useState(false);
+  const [isInteractionLocked, setIsInteractionLocked] = useState(false);
   const [hasTriggeredSystemIntervention, setHasTriggeredSystemIntervention] =
     useState(false);
   const lastCodeLength = useRef(code.length);
@@ -197,6 +199,7 @@ export function ChallengeWorkspace({
     setDeletionCount(0);
     setIsHistoryLoaded(false);
     setIsEditorSessionLoaded(false);
+    setIsInteractionLocked(false);
     setHasTriggeredSystemIntervention(false);
     lastCodeLength.current = problem.starterCode.length;
     hasUserTypedRef.current = false;
@@ -231,6 +234,8 @@ export function ChallengeWorkspace({
         }
 
         lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
+        latestStatusIdRef.current = session.status_id;
+        setIsInteractionLocked(session.status_id === 2);
 
         if (!hasUserTypedRef.current && session.code) {
           setCode(session.code);
@@ -256,6 +261,7 @@ export function ChallengeWorkspace({
     if (
       !isEditorSessionLoaded ||
       !isBackendProblem ||
+      isInteractionLocked ||
       !hasUserTypedRef.current
     ) {
       return;
@@ -276,11 +282,21 @@ export function ChallengeWorkspace({
         saveDebounceTimerRef.current = null;
       }
     };
-  }, [code, isBackendProblem, isEditorSessionLoaded, saveEditorSession]);
+  }, [
+    code,
+    isBackendProblem,
+    isEditorSessionLoaded,
+    isInteractionLocked,
+    saveEditorSession,
+  ]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!isEditorSessionLoaded || !isBackendProblem) {
+        return;
+      }
+
+      if (isInteractionLocked) {
         return;
       }
 
@@ -300,7 +316,12 @@ export function ChallengeWorkspace({
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isBackendProblem, isEditorSessionLoaded, saveEditorSession]);
+  }, [
+    isBackendProblem,
+    isEditorSessionLoaded,
+    isInteractionLocked,
+    saveEditorSession,
+  ]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -487,7 +508,7 @@ export function ChallengeWorkspace({
   ]);
 
   const handleCodeChange = (newCode: string | undefined) => {
-    if (newCode === undefined) return;
+    if (newCode === undefined || isInteractionLocked) return;
 
     hasUserTypedRef.current = true;
 
@@ -836,6 +857,11 @@ export function ChallengeWorkspace({
         statusIdOverride: isAccepted ? 2 : 1,
         force: true,
       });
+
+      if (isAccepted) {
+        setIsInteractionLocked(true);
+        latestStatusIdRef.current = 2;
+      }
     } catch (err: unknown) {
       const errorMessage = String(err);
       const finalOutput = [`Submit error: ${errorMessage}`];
@@ -856,6 +882,14 @@ export function ChallengeWorkspace({
   };
 
   const handleSendMessage = async (content: string) => {
+    if (isInteractionLocked) {
+      setAgentState("idle");
+      setAgentMessage(
+        "Challenge sudah completed. Klik Reattempt untuk chat lagi.",
+      );
+      return;
+    }
+
     const optimisticUserMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -927,6 +961,22 @@ export function ChallengeWorkspace({
     }
   };
 
+  const handleReattempt = useCallback(() => {
+    setIsInteractionLocked(false);
+    latestStatusIdRef.current = 1;
+    setAgentState("happy");
+    setAgentMessage("Reattempt aktif. Kamu bisa edit code dan chat lagi.");
+
+    if (!isBackendProblem) {
+      return;
+    }
+
+    void saveEditorSession(codeRef.current, {
+      statusIdOverride: 1,
+      force: true,
+    });
+  }, [isBackendProblem, saveEditorSession]);
+
   const handleBackClick = useCallback(() => {
     if (saveDebounceTimerRef.current) {
       clearTimeout(saveDebounceTimerRef.current);
@@ -935,12 +985,14 @@ export function ChallengeWorkspace({
 
     void (async () => {
       try {
-        await saveEditorSession(codeRef.current, { force: true });
+        if (!isInteractionLocked) {
+          await saveEditorSession(codeRef.current, { force: true });
+        }
       } finally {
         onBack();
       }
     })();
-  }, [onBack, saveEditorSession]);
+  }, [isInteractionLocked, onBack, saveEditorSession]);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -999,6 +1051,21 @@ export function ChallengeWorkspace({
         </div>
 
         <div className="flex items-center gap-4">
+          {isInteractionLocked && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-100 px-2.5 py-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">
+                COMPLETED
+              </span>
+              <button
+                onClick={handleReattempt}
+                className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-amber-500"
+                type="button"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reattempt
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
             <div
               className={cn(
@@ -1118,7 +1185,11 @@ export function ChallengeWorkspace({
           </div>
 
           <div className="flex-1 relative">
-            <CodeEditor code={code} onChange={handleCodeChange} />
+            <CodeEditor
+              code={code}
+              onChange={handleCodeChange}
+              readOnly={isInteractionLocked}
+            />
           </div>
 
           <div
@@ -1418,6 +1489,13 @@ export function ChallengeWorkspace({
             <div className="flex flex-col items-center py-8 space-y-6">
               <button
                 onClick={() => {
+                  if (isInteractionLocked) {
+                    setAgentMessage(
+                      "Challenge sudah completed. Klik Reattempt untuk aktifkan chat.",
+                    );
+                    return;
+                  }
+
                   setIsChatOpen(true);
                   setHasClickedMascot(true);
                 }}
@@ -1459,6 +1537,7 @@ export function ChallengeWorkspace({
         messages={chatMessages}
         onSendMessage={handleSendMessage}
         isTyping={isTyping}
+        disabled={isInteractionLocked}
         isOpen={isChatOpen}
         setIsOpen={setIsChatOpen}
         isMinimized={isMinimized}

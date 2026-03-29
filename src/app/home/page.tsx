@@ -35,7 +35,7 @@ export default function HomePage() {
           setError(
             "Failed to load problems. Please check your connection and try again.",
           );
-          // Fallback - could use empty array or hardcoded PROBLEMS
+          // Keep empty state when backend fails.
           setProblems([]);
         }
 

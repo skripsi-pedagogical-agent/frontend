@@ -15,9 +15,16 @@ interface Problem {
   title: string;
   description: string;
   difficulty: "Easy" | "Medium" | "Hard";
+  statusId?: 0 | 1 | 2;
   category: string;
   slug: string;
 }
+
+const STATUS_LABELS: Record<0 | 1 | 2, string> = {
+  0: "Not Started",
+  1: "In Progress",
+  2: "Completed",
+};
 
 interface MainMenuProps {
   username: string;
@@ -153,12 +160,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-emerald-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-600">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      Not Started
-                    </span>
-                  </div>
+                  {isLoggedIn ? (
+                    <div className="flex items-center gap-2 text-emerald-600">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        {STATUS_LABELS[problem.statusId ?? 0]}
+                      </span>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                   <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-700 group-hover:bg-emerald-700 group-hover:text-white transition-all">
                     <ChevronRight className="w-6 h-6" />
                   </div>

@@ -2,6 +2,7 @@ export interface BackendProblem {
   id: string;
   title: string;
   slug: string;
+  status_id?: 0 | 1 | 2 | null;
   difficulty: "EASY" | "MEDIUM" | "HARD";
   description: string;
   method_name: string;
