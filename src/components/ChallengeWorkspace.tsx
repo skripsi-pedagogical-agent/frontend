@@ -416,104 +416,167 @@ export function ChallengeWorkspace({
     }
   }, [agentMessage, idleTime, isChatOpen, isMinimized]);
 
+  // Effect untuk error burst intervention
+  useEffect(() => {
+    const shouldTriggerOnError =
+      errorCount > 0 &&
+      errorCount >= 3 &&
+      Math.floor(errorCount / 3) >
+        Math.floor(lastErrorTriggerCountRef.current / 3);
+
+    if (!shouldTriggerOnError || isChatOpen) {
+      return;
+    }
+
+    // Mark sebagai triggered untuk error level ini
+    lastErrorTriggerCountRef.current = errorCount;
+
+    const triggerErrorHint = async () => {
+      setAgentState("stuck");
+      setAgentMessage(
+        `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+      );
+
+      try {
+        if (isBackendProblem) {
+          const authUser = getStoredAuthUser();
+
+          if (authUser?.id) {
+            const response = await triggerAgentSystemIntervention({
+              user_id: authUser.id,
+              problem_id: problem.id,
+              current_user_code: code,
+              trigger_type: "error_burst",
+              trigger_payload: { error_count: errorCount },
+            });
+
+            const newMessage: Message = {
+              id: response.ai_message.id,
+              role: "assistant",
+              content: response.ai_message.message,
+              type: "observational",
+              timestamp: new Date(response.ai_message.created_at),
+            };
+
+            setChatMessages([newMessage]);
+            setIsChatOpen(true);
+            setHasClickedMascot(true);
+            setAgentState("talking");
+            return;
+          }
+        }
+
+        // Fallback ke Gemini
+        setIsTyping(true);
+        const aiHint = await getPedagogicalHint(problem.description, code);
+        setIsTyping(false);
+
+        const fallbackMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: aiHint.hint,
+          type: "observational",
+          timestamp: new Date(),
+        };
+
+        setChatMessages([fallbackMessage]);
+        setIsChatOpen(true);
+        setHasClickedMascot(true);
+        setAgentState("talking");
+      } catch {
+        setIsTyping(false);
+        setAgentState("sad");
+        setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
+      }
+    };
+
+    void triggerErrorHint();
+  }, [
+    errorCount,
+    isBackendProblem,
+    isChatOpen,
+    problem.id,
+    problem.description,
+    code,
+    username,
+  ]);
+
   useEffect(() => {
     const shouldTriggerOnIdleThreshold =
       idleTime > 0 &&
       idleTime >= 90 &&
       Math.floor(idleTime / 90) >
         Math.floor(lastIdleTriggerTimeRef.current / 90);
-    const shouldTriggerOnErrorThreshold =
-      errorCount > 0 &&
-      errorCount >= 3 &&
-      Math.floor(errorCount / 3) >
-        Math.floor(lastErrorTriggerCountRef.current / 3);
 
-    const triggerHint = async () => {
-      if (
-        (shouldTriggerOnIdleThreshold || shouldTriggerOnErrorThreshold) &&
-        !isChatOpen &&
-        chatMessages.length === 0
-      ) {
-        setAgentState("stuck");
-        setAgentMessage(
-          `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-        );
+    if (!shouldTriggerOnIdleThreshold || isChatOpen) {
+      return;
+    }
 
-        // Update the last trigger time/count to prevent re-triggering at same threshold
-        if (shouldTriggerOnIdleThreshold) {
-          lastIdleTriggerTimeRef.current = idleTime;
-        }
-        if (shouldTriggerOnErrorThreshold) {
-          lastErrorTriggerCountRef.current = errorCount;
-        }
+    lastIdleTriggerTimeRef.current = idleTime;
 
-        try {
-          if (isBackendProblem) {
-            const authUser = getStoredAuthUser();
+    const triggerIdleHint = async () => {
+      setAgentState("stuck");
+      setAgentMessage(
+        `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+      );
 
-            if (authUser?.id) {
-              const triggerType = shouldTriggerOnIdleThreshold
-                ? "inactivity"
-                : "error_burst";
-              const triggerPayload = shouldTriggerOnIdleThreshold
-                ? { idle_seconds: idleTime }
-                : { error_count: errorCount };
+      try {
+        if (isBackendProblem) {
+          const authUser = getStoredAuthUser();
 
-              const response = await triggerAgentSystemIntervention({
-                user_id: authUser.id,
-                problem_id: problem.id,
-                current_user_code: code,
-                trigger_type: triggerType,
-                trigger_payload: triggerPayload,
-              });
+          if (authUser?.id) {
+            const response = await triggerAgentSystemIntervention({
+              user_id: authUser.id,
+              problem_id: problem.id,
+              current_user_code: code,
+              trigger_type: "inactivity",
+              trigger_payload: { idle_seconds: idleTime },
+            });
 
-              const newMessage: Message = {
-                id: response.ai_message.id,
-                role: "assistant",
-                content: response.ai_message.message,
-                type: "observational",
-                timestamp: new Date(response.ai_message.created_at),
-              };
+            const newMessage: Message = {
+              id: response.ai_message.id,
+              role: "assistant",
+              content: response.ai_message.message,
+              type: "observational",
+              timestamp: new Date(response.ai_message.created_at),
+            };
 
-              setChatMessages([newMessage]);
-              setIsChatOpen(true);
-              setHasClickedMascot(true);
-              setAgentState("talking");
-              return;
-            }
+            setChatMessages([newMessage]);
+            setIsChatOpen(true);
+            setHasClickedMascot(true);
+            setAgentState("talking");
+            return;
           }
-
-          setIsTyping(true);
-          const aiHint = await getPedagogicalHint(problem.description, code);
-          setIsTyping(false);
-
-          const fallbackMessage: Message = {
-            id: Date.now().toString(),
-            role: "assistant",
-            content: aiHint.hint,
-            type: "observational",
-            timestamp: new Date(),
-          };
-
-          setChatMessages([fallbackMessage]);
-          setIsChatOpen(true);
-          setHasClickedMascot(true);
-          setAgentState("talking");
-        } catch {
-          setIsTyping(false);
-          setAgentState("sad");
-          setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
         }
+
+        setIsTyping(true);
+        const aiHint = await getPedagogicalHint(problem.description, code);
+        setIsTyping(false);
+
+        const fallbackMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: aiHint.hint,
+          type: "observational",
+          timestamp: new Date(),
+        };
+
+        setChatMessages([fallbackMessage]);
+        setIsChatOpen(true);
+        setHasClickedMascot(true);
+        setAgentState("talking");
+      } catch {
+        setIsTyping(false);
+        setAgentState("sad");
+        setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
       }
     };
 
     if (idleTime > 0 && idleTime % 5 === 0) {
-      void triggerHint();
+      void triggerIdleHint();
     }
   }, [
-    chatMessages.length,
     code,
-    errorCount,
     idleTime,
     isBackendProblem,
     isChatOpen,
