@@ -458,7 +458,7 @@ export function ChallengeWorkspace({
               timestamp: new Date(response.ai_message.created_at),
             };
 
-            setChatMessages([newMessage]);
+            setChatMessages((prev) => [...prev, newMessage]);
             setIsChatOpen(true);
             setHasClickedMascot(true);
             setAgentState("talking");
@@ -479,7 +479,7 @@ export function ChallengeWorkspace({
           timestamp: new Date(),
         };
 
-        setChatMessages([fallbackMessage]);
+        setChatMessages((prev) => [...prev, fallbackMessage]);
         setIsChatOpen(true);
         setHasClickedMascot(true);
         setAgentState("talking");
@@ -540,7 +540,7 @@ export function ChallengeWorkspace({
               timestamp: new Date(response.ai_message.created_at),
             };
 
-            setChatMessages([newMessage]);
+            setChatMessages((prev) => [...prev, newMessage]);
             setIsChatOpen(true);
             setHasClickedMascot(true);
             setAgentState("talking");
@@ -560,7 +560,7 @@ export function ChallengeWorkspace({
           timestamp: new Date(),
         };
 
-        setChatMessages([fallbackMessage]);
+        setChatMessages((prev) => [...prev, fallbackMessage]);
         setIsChatOpen(true);
         setHasClickedMascot(true);
         setAgentState("talking");
