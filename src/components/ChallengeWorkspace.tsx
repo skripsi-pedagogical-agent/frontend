@@ -116,8 +116,6 @@ export function ChallengeWorkspace({
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [isEditorSessionLoaded, setIsEditorSessionLoaded] = useState(false);
   const [isInteractionLocked, setIsInteractionLocked] = useState(false);
-  const [hasTriggeredSystemIntervention, setHasTriggeredSystemIntervention] =
-    useState(false);
   const lastCodeLength = useRef(code.length);
   const codeRef = useRef(code);
   const hasUserTypedRef = useRef(false);
@@ -126,6 +124,8 @@ export function ChallengeWorkspace({
     null,
   );
   const lastSavedSignatureRef = useRef<string | null>(null);
+  const lastIdleTriggerTimeRef = useRef(0);
+  const lastErrorTriggerCountRef = useRef(0);
 
   const isBackendProblem =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -200,7 +200,8 @@ export function ChallengeWorkspace({
     setIsHistoryLoaded(false);
     setIsEditorSessionLoaded(false);
     setIsInteractionLocked(false);
-    setHasTriggeredSystemIntervention(false);
+    lastIdleTriggerTimeRef.current = 0;
+    lastErrorTriggerCountRef.current = 0;
     lastCodeLength.current = problem.starterCode.length;
     hasUserTypedRef.current = false;
     lastSavedSignatureRef.current = null;
@@ -416,30 +417,45 @@ export function ChallengeWorkspace({
   }, [agentMessage, idleTime, isChatOpen, isMinimized]);
 
   useEffect(() => {
-    const isIdle = idleTime >= 90;
-    const isErrorProne = errorCount >= 3;
+    const shouldTriggerOnIdleThreshold =
+      idleTime > 0 &&
+      idleTime >= 90 &&
+      Math.floor(idleTime / 90) >
+        Math.floor(lastIdleTriggerTimeRef.current / 90);
+    const shouldTriggerOnErrorThreshold =
+      errorCount > 0 &&
+      errorCount >= 3 &&
+      Math.floor(errorCount / 3) >
+        Math.floor(lastErrorTriggerCountRef.current / 3);
 
     const triggerHint = async () => {
       if (
-        (isIdle || isErrorProne) &&
+        (shouldTriggerOnIdleThreshold || shouldTriggerOnErrorThreshold) &&
         !isChatOpen &&
-        chatMessages.length === 0 &&
-        !hasTriggeredSystemIntervention
+        chatMessages.length === 0
       ) {
         setAgentState("stuck");
         setAgentMessage(
           `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
         );
 
-        setHasTriggeredSystemIntervention(true);
+        // Update the last trigger time/count to prevent re-triggering at same threshold
+        if (shouldTriggerOnIdleThreshold) {
+          lastIdleTriggerTimeRef.current = idleTime;
+        }
+        if (shouldTriggerOnErrorThreshold) {
+          lastErrorTriggerCountRef.current = errorCount;
+        }
 
         try {
           if (isBackendProblem) {
             const authUser = getStoredAuthUser();
 
             if (authUser?.id) {
-              const triggerType = isIdle ? "inactivity" : "error_burst";
-              const triggerPayload = isIdle
+              const triggerType = shouldTriggerOnIdleThreshold
+                ? "inactivity"
+                : "error_burst";
+              const triggerPayload = shouldTriggerOnIdleThreshold
                 ? { idle_seconds: idleTime }
                 : { error_count: errorCount };
 
@@ -491,14 +507,13 @@ export function ChallengeWorkspace({
       }
     };
 
-    if (idleTime > 0 && (idleTime % 5 === 0 || idleTime === 90)) {
+    if (idleTime > 0 && idleTime % 5 === 0) {
       void triggerHint();
     }
   }, [
     chatMessages.length,
     code,
     errorCount,
-    hasTriggeredSystemIntervention,
     idleTime,
     isBackendProblem,
     isChatOpen,
@@ -615,6 +630,7 @@ export function ChallengeWorkspace({
             setAgentMessage(
               `Baru ${passedCount}/${judgeResults.length} test case yang lulus. Yuk cek case yang gagal.`,
             );
+            setErrorCount((prev) => prev + 1);
           }
         } catch (err: unknown) {
           const errorMessage = String(err);
@@ -846,11 +862,13 @@ export function ChallengeWorkspace({
         setAgentMessage(
           "Masih ada error saat submit. Cek pesan error di panel hasil ya.",
         );
+        setErrorCount((prev) => prev + 1);
       } else {
         setAgentState("talking");
         setAgentMessage(
           "Belum accepted. Bandingkan output dan expected lalu perbaiki pelan-pelan.",
         );
+        setErrorCount((prev) => prev + 1);
       }
 
       void saveEditorSession(code, {
