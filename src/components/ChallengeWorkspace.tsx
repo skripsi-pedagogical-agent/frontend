@@ -424,7 +424,7 @@ export function ChallengeWorkspace({
       Math.floor(errorCount / 3) >
         Math.floor(lastErrorTriggerCountRef.current / 3);
 
-    if (!shouldTriggerOnError || isChatOpen) {
+    if (!shouldTriggerOnError) {
       return;
     }
 
@@ -494,7 +494,6 @@ export function ChallengeWorkspace({
   }, [
     errorCount,
     isBackendProblem,
-    isChatOpen,
     problem.id,
     problem.description,
     code,
@@ -508,7 +507,7 @@ export function ChallengeWorkspace({
       Math.floor(idleTime / 90) >
         Math.floor(lastIdleTriggerTimeRef.current / 90);
 
-    if (!shouldTriggerOnIdleThreshold || isChatOpen) {
+    if (!shouldTriggerOnIdleThreshold) {
       return;
     }
 
@@ -579,7 +578,6 @@ export function ChallengeWorkspace({
     code,
     idleTime,
     isBackendProblem,
-    isChatOpen,
     problem.id,
     problem.description,
     username,
