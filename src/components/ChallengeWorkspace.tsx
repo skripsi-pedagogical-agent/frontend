@@ -29,6 +29,11 @@ import {
   sendAgentChatMessage,
   triggerAgentSystemIntervention,
 } from "@/src/services/agentService";
+import {
+  getLatestEditorSession,
+  type EditorSessionStatusId,
+  upsertEditorSession,
+} from "@/src/services/editorSessionService";
 // @ts-ignore
 import Sk from "skulpt";
 
@@ -108,14 +113,74 @@ export function ChallengeWorkspace({
   const [errorCount, setErrorCount] = useState(0);
   const [deletionCount, setDeletionCount] = useState(0);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
+  const [isEditorSessionLoaded, setIsEditorSessionLoaded] = useState(false);
   const [hasTriggeredSystemIntervention, setHasTriggeredSystemIntervention] =
     useState(false);
   const lastCodeLength = useRef(code.length);
+  const codeRef = useRef(code);
+  const hasUserTypedRef = useRef(false);
+  const latestStatusIdRef = useRef<EditorSessionStatusId>(1);
+  const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const lastSavedSignatureRef = useRef<string | null>(null);
 
   const isBackendProblem =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       problem.id,
     );
+
+  const saveEditorSession = useCallback(
+    async (
+      codeToSave: string,
+      options?: {
+        statusIdOverride?: EditorSessionStatusId;
+        keepalive?: boolean;
+        force?: boolean;
+      },
+    ) => {
+      if (!isBackendProblem) {
+        return;
+      }
+
+      const authUser = getStoredAuthUser();
+      if (!authUser?.id) {
+        return;
+      }
+
+      const statusId = options?.statusIdOverride ?? latestStatusIdRef.current;
+      const signature = `${statusId}:${codeToSave}`;
+
+      if (!options?.force && signature === lastSavedSignatureRef.current) {
+        return;
+      }
+
+      try {
+        const saved = await upsertEditorSession(
+          {
+            user_id: authUser.id,
+            problem_id: problem.id,
+            code: codeToSave,
+            status_id: statusId,
+          },
+          { keepalive: options?.keepalive },
+        );
+
+        lastSavedSignatureRef.current = `${saved.status_id}:${saved.code}`;
+      } catch (error) {
+        console.error("Failed to save editor session:", error);
+      }
+    },
+    [isBackendProblem, problem.id],
+  );
+
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
+  useEffect(() => {
+    latestStatusIdRef.current = lastResult?.status === "Accepted" ? 2 : 1;
+  }, [lastResult]);
 
   useEffect(() => {
     setCode(problem.starterCode);
@@ -131,9 +196,111 @@ export function ChallengeWorkspace({
     setErrorCount(0);
     setDeletionCount(0);
     setIsHistoryLoaded(false);
+    setIsEditorSessionLoaded(false);
     setHasTriggeredSystemIntervention(false);
     lastCodeLength.current = problem.starterCode.length;
+    hasUserTypedRef.current = false;
+    lastSavedSignatureRef.current = null;
+
+    if (saveDebounceTimerRef.current) {
+      clearTimeout(saveDebounceTimerRef.current);
+      saveDebounceTimerRef.current = null;
+    }
   }, [problem]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadEditorSession = async () => {
+      if (!isBackendProblem) {
+        setIsEditorSessionLoaded(true);
+        return;
+      }
+
+      const authUser = getStoredAuthUser();
+      if (!authUser?.id) {
+        setIsEditorSessionLoaded(true);
+        return;
+      }
+
+      try {
+        const session = await getLatestEditorSession(problem.id, authUser.id);
+
+        if (isCancelled || !session) {
+          return;
+        }
+
+        lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
+
+        if (!hasUserTypedRef.current && session.code) {
+          setCode(session.code);
+          lastCodeLength.current = session.code.length;
+        }
+      } catch (error) {
+        console.error("Failed to load editor session:", error);
+      } finally {
+        if (!isCancelled) {
+          setIsEditorSessionLoaded(true);
+        }
+      }
+    };
+
+    void loadEditorSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isBackendProblem, problem.id]);
+
+  useEffect(() => {
+    if (
+      !isEditorSessionLoaded ||
+      !isBackendProblem ||
+      !hasUserTypedRef.current
+    ) {
+      return;
+    }
+
+    if (saveDebounceTimerRef.current) {
+      clearTimeout(saveDebounceTimerRef.current);
+    }
+
+    saveDebounceTimerRef.current = setTimeout(() => {
+      void saveEditorSession(codeRef.current);
+      saveDebounceTimerRef.current = null;
+    }, 5000);
+
+    return () => {
+      if (saveDebounceTimerRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+        saveDebounceTimerRef.current = null;
+      }
+    };
+  }, [code, isBackendProblem, isEditorSessionLoaded, saveEditorSession]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!isEditorSessionLoaded || !isBackendProblem) {
+        return;
+      }
+
+      if (saveDebounceTimerRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+        saveDebounceTimerRef.current = null;
+      }
+
+      void saveEditorSession(codeRef.current, {
+        keepalive: true,
+        force: true,
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isBackendProblem, isEditorSessionLoaded, saveEditorSession]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -321,6 +488,8 @@ export function ChallengeWorkspace({
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined) return;
+
+    hasUserTypedRef.current = true;
 
     const diff = lastCodeLength.current - newCode.length;
     if (diff > 0) {
@@ -662,6 +831,11 @@ export function ChallengeWorkspace({
           "Belum accepted. Bandingkan output dan expected lalu perbaiki pelan-pelan.",
         );
       }
+
+      void saveEditorSession(code, {
+        statusIdOverride: isAccepted ? 2 : 1,
+        force: true,
+      });
     } catch (err: unknown) {
       const errorMessage = String(err);
       const finalOutput = [`Submit error: ${errorMessage}`];
@@ -753,6 +927,21 @@ export function ChallengeWorkspace({
     }
   };
 
+  const handleBackClick = useCallback(() => {
+    if (saveDebounceTimerRef.current) {
+      clearTimeout(saveDebounceTimerRef.current);
+      saveDebounceTimerRef.current = null;
+    }
+
+    void (async () => {
+      try {
+        await saveEditorSession(codeRef.current, { force: true });
+      } finally {
+        onBack();
+      }
+    })();
+  }, [onBack, saveEditorSession]);
+
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -789,7 +978,7 @@ export function ChallengeWorkspace({
       <header className="h-16 bg-[#f0f4f2] border-b border-emerald-500/30 px-6 flex items-center justify-between shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={onBack}
+            onClick={handleBackClick}
             className="p-2 hover:bg-emerald-300/50 rounded-xl transition-colors mr-2 text-emerald-900"
           >
             <ArrowLeft className="w-5 h-5" />
