@@ -18,7 +18,6 @@ import { twMerge } from "tailwind-merge";
 import { ChatBot, type Message } from "@/src/components/ChatBot";
 import { CodeEditor } from "@/src/components/CodeEditor";
 import { PandaMascot } from "@/src/components/PandaMascot";
-import { getPedagogicalHint } from "@/src/services/geminiService";
 import {
   runTestCaseOnBackend,
   submitProblemToBackend,
@@ -472,14 +471,7 @@ export function ChallengeWorkspace({
     };
 
     void triggerErrorHint();
-  }, [
-    errorCount,
-    isBackendProblem,
-    problem.id,
-    problem.description,
-    code,
-    username,
-  ]);
+  }, [errorCount, isBackendProblem, problem.id, code, username]);
 
   useEffect(() => {
     const shouldTriggerOnIdleThreshold =
@@ -537,14 +529,7 @@ export function ChallengeWorkspace({
     if (idleTime > 0 && idleTime % 5 === 0) {
       void triggerIdleHint();
     }
-  }, [
-    code,
-    idleTime,
-    isBackendProblem,
-    problem.id,
-    problem.description,
-    username,
-  ]);
+  }, [code, idleTime, isBackendProblem, problem.id, username]);
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined || isInteractionLocked) return;
@@ -969,23 +954,7 @@ export function ChallengeWorkspace({
         }
       }
 
-      const aiHint = await getPedagogicalHint(
-        problem.description,
-        code,
-        content,
-      );
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: aiHint.hint,
-        type: aiHint.type,
-        timestamp: new Date(),
-      };
-
-      setChatMessages((prev) => [...prev, assistantMessage]);
-      setAgentState("talking");
-      setAgentMessage(aiHint.hint);
+      throw new Error("Backend agent service not available for this problem");
     } catch {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
