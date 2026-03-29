@@ -432,11 +432,6 @@ export function ChallengeWorkspace({
     lastErrorTriggerCountRef.current = errorCount;
 
     const triggerErrorHint = async () => {
-      setAgentState("stuck");
-      setAgentMessage(
-        `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-      );
-
       try {
         if (isBackendProblem) {
           const authUser = getStoredAuthUser();
@@ -458,6 +453,11 @@ export function ChallengeWorkspace({
               timestamp: new Date(response.ai_message.created_at),
             };
 
+            // Only show message AFTER successful response
+            setAgentState("stuck");
+            setAgentMessage(
+              `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+            );
             setChatMessages((prev) => [...prev, newMessage]);
             setIsChatOpen(true);
             setHasClickedMascot(true);
@@ -465,26 +465,7 @@ export function ChallengeWorkspace({
             return;
           }
         }
-
-        // Fallback ke Gemini
-        setIsTyping(true);
-        const aiHint = await getPedagogicalHint(problem.description, code);
-        setIsTyping(false);
-
-        const fallbackMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: aiHint.hint,
-          type: "observational",
-          timestamp: new Date(),
-        };
-
-        setChatMessages((prev) => [...prev, fallbackMessage]);
-        setIsChatOpen(true);
-        setHasClickedMascot(true);
-        setAgentState("talking");
       } catch {
-        setIsTyping(false);
         setAgentState("sad");
         setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
       }
@@ -514,11 +495,6 @@ export function ChallengeWorkspace({
     lastIdleTriggerTimeRef.current = idleTime;
 
     const triggerIdleHint = async () => {
-      setAgentState("stuck");
-      setAgentMessage(
-        `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-      );
-
       try {
         if (isBackendProblem) {
           const authUser = getStoredAuthUser();
@@ -540,6 +516,11 @@ export function ChallengeWorkspace({
               timestamp: new Date(response.ai_message.created_at),
             };
 
+            // Only show message AFTER successful response
+            setAgentState("stuck");
+            setAgentMessage(
+              `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+            );
             setChatMessages((prev) => [...prev, newMessage]);
             setIsChatOpen(true);
             setHasClickedMascot(true);
@@ -547,25 +528,7 @@ export function ChallengeWorkspace({
             return;
           }
         }
-
-        setIsTyping(true);
-        const aiHint = await getPedagogicalHint(problem.description, code);
-        setIsTyping(false);
-
-        const fallbackMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: aiHint.hint,
-          type: "observational",
-          timestamp: new Date(),
-        };
-
-        setChatMessages((prev) => [...prev, fallbackMessage]);
-        setIsChatOpen(true);
-        setHasClickedMascot(true);
-        setAgentState("talking");
       } catch {
-        setIsTyping(false);
         setAgentState("sad");
         setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
       }
