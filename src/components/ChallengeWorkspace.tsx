@@ -417,6 +417,8 @@ export function ChallengeWorkspace({
 
   // Effect untuk error burst intervention
   useEffect(() => {
+    if (isInteractionLocked) return;
+
     const shouldTriggerOnError =
       errorCount > 0 &&
       errorCount >= 3 &&
@@ -471,9 +473,18 @@ export function ChallengeWorkspace({
     };
 
     void triggerErrorHint();
-  }, [errorCount, isBackendProblem, problem.id, code, username]);
+  }, [
+    errorCount,
+    isBackendProblem,
+    problem.id,
+    code,
+    username,
+    isInteractionLocked,
+  ]);
 
   useEffect(() => {
+    if (isInteractionLocked) return;
+
     const shouldTriggerOnIdleThreshold =
       idleTime > 0 &&
       idleTime >= 90 &&
@@ -529,7 +540,14 @@ export function ChallengeWorkspace({
     if (idleTime > 0 && idleTime % 5 === 0) {
       void triggerIdleHint();
     }
-  }, [code, idleTime, isBackendProblem, problem.id, username]);
+  }, [
+    code,
+    idleTime,
+    isBackendProblem,
+    problem.id,
+    username,
+    isInteractionLocked,
+  ]);
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined || isInteractionLocked) return;
