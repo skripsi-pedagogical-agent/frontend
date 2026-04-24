@@ -389,9 +389,9 @@ export function ChallengeWorkspace({
 
     if (chatMessages.length === 0 && !agentMessage) {
       const welcomes = [
-        `Hey ${username}! Ready to crush this problem? I'm your panda-tutor, Bamboost!`,
-        `Welcome to the editor, ${username}! Let's write some clean code together.`,
-        `Hi ${username}! I'm Bamboost. I'll be watching your progress and helping out if you get stuck!`,
+        `Hei ${username}! Siap mengalahkan masalah ini? Saya panda-tutor Anda, Bamboost!`,
+        `Selamat datang di editor, ${username}! Mari kita tulis kode yang bersih bersama-sama.`,
+        `Halo ${username}! Saya Bamboost. Saya akan memantau kemajuan Anda dan membantu jika Anda macet!`,
       ];
       setAgentMessage(welcomes[Math.floor(Math.random() * welcomes.length)]);
       setAgentState("happy");
@@ -414,6 +414,15 @@ export function ChallengeWorkspace({
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (submitIdleTime === 30 && !agentMessage && (!isChatOpen || isMinimized)) {
+      setAgentState("confused");
+      setAgentMessage(
+        "Butuh bantuan dengan logika? Saya bisa beri petunjuk di chat.",
+      );
+    }
+  }, [agentMessage, submitIdleTime, isChatOpen, isMinimized]);
 
   // Effect untuk error burst intervention
   useEffect(() => {
@@ -642,7 +651,8 @@ export function ChallengeWorkspace({
 
     if (isBackendProblem) {
       setIsRunning(true);
-      setAgentState("thinking");
+      // Remove mascot reaction when starting to run code
+      // setAgentState("thinking");
       setOutput([]);
 
       void (async () => {
@@ -677,15 +687,15 @@ export function ChallengeWorkspace({
                     const lines = [
                       `Case ${index + 1}: ${result.message}`,
                       result.error
-                        ? `Error: ${result.error}`
-                        : `Output: ${result.output || "No output"}`,
+                        ? `Kesalahan: ${result.error}`
+                        : `Output: ${result.output || "Tidak ada output"}`,
                     ];
                     return lines.join("\n");
                   })
                   .slice(0, 3)
               : [
                   response.judge_result.overall_message ||
-                    "Run testcase completed with no detailed output.",
+                    "Run testcase selesai tanpa output detail.",
                 ];
 
           setSelectedResultTestCaseIndex(0);
@@ -704,10 +714,11 @@ export function ChallengeWorkspace({
           setConsoleTab("result");
 
           if (isAccepted) {
-            setAgentState("happy");
-            setAgentMessage(
-              `Nice ${username}! Semua ${passedCount} test case lulus saat run testcase.`,
-            );
+            // Remove mascot reaction for successful runs
+            // setAgentState("happy");
+            // setAgentMessage(
+            //   `Nice ${username}! Semua ${passedCount} test case lulus saat run testcase.`,
+            // );
           } else if (isExecutionError) {
             setAgentState("sad");
             setAgentMessage(
@@ -715,10 +726,11 @@ export function ChallengeWorkspace({
             );
             setErrorCount((prev) => prev + 1);
           } else {
-            setAgentState("talking");
-            setAgentMessage(
-              `Baru ${passedCount}/${judgeResults.length} test case yang lulus. Yuk cek case yang gagal.`,
-            );
+            // Remove mascot reaction for wrong answers
+            // setAgentState("talking");
+            // setAgentMessage(
+            //   `Baru ${passedCount}/${judgeResults.length} test case yang lulus. Yuk cek case yang gagal.`,
+            // );
             setErrorCount((prev) => prev + 1);
           }
         } catch (err: unknown) {
@@ -800,20 +812,21 @@ export function ChallengeWorkspace({
           const finalOutput = outputBuffer.filter((line) => line.trim() !== "");
           setOutput(finalOutput);
 
-          if (finalOutput.length === 0) {
-            setAgentState("confused");
-            setAgentMessage(
-              "I don't see any output. Did you forget to call your function or use print()?",
-            );
-            setLastResult({
-              isCorrect: false,
-              output: ["No output produced."],
-              runtime,
-              status: "Error",
-            });
-            setConsoleTab("result");
-            return;
-          }
+        if (finalOutput.length === 0) {
+          // Remove mascot reaction for no output
+          // setAgentState("confused");
+          // setAgentMessage(
+          //   "Saya tidak melihat output apapun. Apakah Anda lupa memanggil fungsi atau menggunakan print()?",
+          // );
+          setLastResult({
+            isCorrect: false,
+            output: ["Tidak ada output yang dihasilkan."],
+            runtime,
+            status: "Error",
+          });
+          setConsoleTab("result");
+          return;
+        }
 
           const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
           const expected = selectedTestCase.expectedOutput.trim();
@@ -831,30 +844,32 @@ export function ChallengeWorkspace({
           });
           setConsoleTab("result");
 
-          if (isCorrect) {
-            setAgentState("happy");
-            setAgentMessage(
-              `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
-            );
-          } else {
-            setAgentState("talking");
-            setAgentMessage(
-              "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
-            );
-          }
-        },
-        (err: unknown) => {
-          setIsRunning(false);
-          const errorMessage = String(err);
-          const finalOutput = [`Error: ${errorMessage}`];
-          setOutput(finalOutput);
-          setLastResult({
-            isCorrect: false,
-            output: finalOutput,
-            runtime: 0,
-            status: "Error",
-          });
-          setConsoleTab("result");
+        if (isCorrect) {
+          // Remove mascot reaction for successful runs
+          // setAgentState("happy");
+          // setAgentMessage(
+          //   `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
+          // );
+        } else {
+          // Remove mascot reaction for wrong answers
+          // setAgentState("talking");
+          // setAgentMessage(
+          //   "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
+          // );
+        }
+      },
+      (err: unknown) => {
+        setIsRunning(false);
+        const errorMessage = String(err);
+        const finalOutput = [`Error: ${errorMessage}`];
+        setOutput(finalOutput);
+        setLastResult({
+          isCorrect: false,
+          output: finalOutput,
+          runtime: 0,
+          status: "Error",
+        });
+        setConsoleTab("result");
 
           if (errorMessage.includes("IndentationError")) {
             setAgentState("sad");
@@ -889,7 +904,8 @@ export function ChallengeWorkspace({
     }
 
     setIsRunning(true);
-    setAgentState("thinking");
+    // Remove mascot reaction when starting to submit code
+    // setAgentState("thinking");
     setOutput([]);
 
     try {
@@ -921,7 +937,7 @@ export function ChallengeWorkspace({
       const finalOutput =
         outputLines.length > 0
           ? outputLines
-          : ["Submission processed, but no output was returned by backend."];
+          : ["Pengiriman diproses, tetapi tidak ada output yang dikembalikan oleh backend."];
 
       const judgeResults = submission.judge_result.results.map((result) => ({
         status: result.status,
@@ -950,10 +966,11 @@ export function ChallengeWorkspace({
       setConsoleTab("result");
 
       if (isAccepted) {
-        setAgentState("happy");
-        setAgentMessage(
-          `Excellent ${username}! Solusi kamu lolos semua test case di backend.`,
-        );
+        // Remove mascot reaction for successful submissions
+        // setAgentState("happy");
+        // setAgentMessage(
+        //   `Excellent ${username}! Solusi kamu lolos semua test case di backend.`,
+        // );
       } else if (isExecutionError) {
         setAgentState("sad");
         setAgentMessage(
@@ -961,10 +978,11 @@ export function ChallengeWorkspace({
         );
         setErrorCount((prev) => prev + 1);
       } else {
-        setAgentState("talking");
-        setAgentMessage(
-          "Belum accepted. Bandingkan output dan expected lalu perbaiki pelan-pelan.",
-        );
+        // Remove mascot reaction for wrong answers
+        // setAgentState("talking");
+        // setAgentMessage(
+        //   "Belum accepted. Bandingkan output dan expected lalu perbaiki pelan-pelan.",
+        // );
         setErrorCount((prev) => prev + 1);
       }
 
@@ -1148,7 +1166,7 @@ export function ChallengeWorkspace({
           </h1>
           <div className="ml-4 px-3 py-1 bg-emerald-300/60 rounded-full border border-emerald-400/50">
             <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-              Hello, {username}
+              Halo, {username}
             </span>
           </div>
         </div>
@@ -1229,13 +1247,13 @@ export function ChallengeWorkspace({
 
             <section className="space-y-4 pt-8 border-t border-emerald-400/50">
               <h3 className="text-xs font-black uppercase tracking-widest text-emerald-700">
-                Examples
+                Contoh
               </h3>
               {hasTestCases ? (
                 problem.testCases.map((tc, index) => (
                   <div key={tc.id} className="space-y-2">
                     <p className="text-[11px] font-black text-emerald-900">
-                      Example {index + 1}:
+                      Contoh {index + 1}:
                     </p>
                     <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
                       <p className="text-[10px] font-mono font-black">
@@ -1252,7 +1270,7 @@ export function ChallengeWorkspace({
               ) : (
                 <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
                   <p className="text-[11px] font-bold text-emerald-800">
-                    No example test cases provided for this challenge.
+                    Tidak ada contoh test case yang disediakan untuk tantangan ini.
                   </p>
                 </div>
               )}
@@ -1276,7 +1294,7 @@ export function ChallengeWorkspace({
                 type="button"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                Run Test Case
+                Jalankan Test Case
               </button>
               <button
                 onClick={() => void submitCode()}
@@ -1284,7 +1302,7 @@ export function ChallengeWorkspace({
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
                 type="button"
               >
-                Run Code
+                Jalankan Kode
               </button>
             </div>
           </div>
@@ -1334,7 +1352,7 @@ export function ChallengeWorkspace({
                 type="button"
               >
                 <TerminalIcon className="w-3.5 h-3.5" />
-                Test Result
+                Hasil Test
               </button>
             </div>
 
@@ -1366,13 +1384,13 @@ export function ChallengeWorkspace({
                       </label>
                       <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100">
                         {selectedTestCase.input === "None"
-                          ? "No input required"
+                          ? "Tidak diperlukan input"
                           : selectedTestCase.input}
                       </div>
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 mb-1.5 block">
-                        Expected Output
+                        Output yang Diharapkan
                       </label>
                       <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap">
                         {selectedTestCase.expectedOutput}
@@ -1388,7 +1406,7 @@ export function ChallengeWorkspace({
                         <Play className="w-6 h-6" />
                       </div>
                       <p className="text-xs font-bold text-emerald-700 italic">
-                        Run your code to see the results...
+                        Jalankan kode Anda untuk melihat hasilnya...
                       </p>
                     </div>
                   ) : lastResult.judgeResults ? (
@@ -1409,7 +1427,7 @@ export function ChallengeWorkspace({
                             </span>
                             <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
                               {lastResult.judgeResults.length > 0 &&
-                                `${lastResult.judgeResults.filter((r) => r.status === "AC").length}/${lastResult.judgeResults.length} Passed`}
+                                `${lastResult.judgeResults.filter((r) => r.status === "AC").length}/${lastResult.judgeResults.length} Lulus`}
                             </span>
                           </div>
                           {lastResult.status === "Accepted" ? (
@@ -1423,7 +1441,7 @@ export function ChallengeWorkspace({
                       {/* Test Cases List */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
-                          Test Cases
+                          Test Case
                         </label>
                         <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
                           {lastResult.judgeResults.map((result, index) => (
@@ -1483,7 +1501,7 @@ export function ChallengeWorkspace({
                             .error ? (
                             <div>
                               <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
-                                Error
+                                Kesalahan
                               </label>
                               <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-[150px] overflow-y-auto custom-scrollbar">
                                 {
@@ -1497,7 +1515,7 @@ export function ChallengeWorkspace({
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
-                                  Your Output
+                                  Output Anda
                                 </label>
                                 <div
                                   className={cn(
@@ -1516,7 +1534,7 @@ export function ChallengeWorkspace({
                               </div>
                               <div>
                                 <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
-                                  Expected Output
+                                  Output yang Diharapkan
                                 </label>
                                 <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar">
                                   {lastResult.judgeResults[
@@ -1557,7 +1575,7 @@ export function ChallengeWorkspace({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
-                            Your Output
+                            Output Anda
                           </label>
                           <div
                             className={cn(
@@ -1574,7 +1592,7 @@ export function ChallengeWorkspace({
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
-                            Expected Output
+                            Output yang Diharapkan
                           </label>
                           <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[60px]">
                             {selectedTestCase.expectedOutput}
@@ -1706,7 +1724,7 @@ export function ChallengeWorkspace({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            System Online
+            Sistem Online
           </div>
           <div className="text-emerald-500/60">|</div>
           <div>Python 3.10</div>
@@ -1714,7 +1732,7 @@ export function ChallengeWorkspace({
         <div className="flex items-center gap-4">
           <div>UTF-8</div>
           <div className="text-emerald-500/60">|</div>
-          <div>Line 1, Col 1</div>
+          <div>Baris 1, Kolom 1</div>
         </div>
       </footer>
     </div>
