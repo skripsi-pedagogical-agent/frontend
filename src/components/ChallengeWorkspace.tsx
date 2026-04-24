@@ -34,6 +34,7 @@ import {
   type EditorSessionStatusId,
   upsertEditorSession,
 } from "@/src/services/editorSessionService";
+import { logTelemetry } from "@/src/services/telemetryService";
 // @ts-ignore
 import Sk from "skulpt";
 
@@ -123,6 +124,7 @@ export function ChallengeWorkspace({
   const codeRef = useRef(code);
   const hasUserTypedRef = useRef(false);
   const latestStatusIdRef = useRef<EditorSessionStatusId>(1);
+  const latestSessionIdRef = useRef<string | null>(null);
   const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -171,6 +173,7 @@ export function ChallengeWorkspace({
           { keepalive: options?.keepalive },
         );
 
+        latestSessionIdRef.current = saved.id;
         lastSavedSignatureRef.current = `${saved.status_id}:${saved.code}`;
       } catch (error) {
         console.error("Failed to save editor session:", error);
@@ -238,6 +241,7 @@ export function ChallengeWorkspace({
           return;
         }
 
+        latestSessionIdRef.current = session.id;
         lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
         latestStatusIdRef.current = session.status_id;
         setIsInteractionLocked(session.status_id === 2);
@@ -442,6 +446,17 @@ export function ChallengeWorkspace({
               trigger_payload: { error_count: errorCount },
             });
 
+            if (latestSessionIdRef.current) {
+              void logTelemetry({
+                problem: problem.id,
+                session_id: latestSessionIdRef.current,
+                action_type: "STUCK_ERROR_DETECTED",
+                hint_type: "",
+                code_snapshot: code,
+                metadata: JSON.stringify({ error_count: errorCount }),
+              });
+            }
+
             const newMessage: Message = {
               id: response.ai_message.id,
               role: "assistant",
@@ -487,12 +502,21 @@ export function ChallengeWorkspace({
       submitIdleTime > 0 &&
       submitIdleTime >= SUBMIT_IDLE_PROMPT_SECONDS &&
       Math.floor(submitIdleTime / SUBMIT_IDLE_PROMPT_SECONDS) >
-        Math.floor(
-          lastIdleTriggerTimeRef.current / SUBMIT_IDLE_PROMPT_SECONDS,
-        );
+        Math.floor(lastIdleTriggerTimeRef.current / SUBMIT_IDLE_PROMPT_SECONDS);
 
     if (!shouldPromptSubmitIdle) {
       return;
+    }
+
+    if (latestSessionIdRef.current) {
+      void logTelemetry({
+        problem: problem.id,
+        session_id: latestSessionIdRef.current,
+        action_type: "STUCK_IDLE_DETECTED",
+        hint_type: "",
+        code_snapshot: codeRef.current,
+        metadata: JSON.stringify({ idle_seconds: submitIdleTime }),
+      });
     }
 
     lastIdleTriggerTimeRef.current = submitIdleTime;
@@ -504,6 +528,7 @@ export function ChallengeWorkspace({
     isInteractionLocked,
     isBackendProblem,
     idleHelpCheckIn,
+    problem.id,
   ]);
 
   const handleIdleHelpChoiceNo = useCallback(() => {
@@ -765,83 +790,86 @@ export function ChallengeWorkspace({
       return Sk.importMainWithBody("<stdin>", false, codeToRun, true);
     });
 
-    runPromise.then(
-      () => {
-        const runtime = Math.round(performance.now() - startTime);
-        if (currentLine) outputBuffer.push(currentLine);
+    runPromise
+      .then(
+        () => {
+          const runtime = Math.round(performance.now() - startTime);
+          if (currentLine) outputBuffer.push(currentLine);
 
-        setIsRunning(false);
-        const finalOutput = outputBuffer.filter((line) => line.trim() !== "");
-        setOutput(finalOutput);
+          setIsRunning(false);
+          const finalOutput = outputBuffer.filter((line) => line.trim() !== "");
+          setOutput(finalOutput);
 
-        if (finalOutput.length === 0) {
-          setAgentState("confused");
-          setAgentMessage(
-            "I don't see any output. Did you forget to call your function or use print()?",
-          );
+          if (finalOutput.length === 0) {
+            setAgentState("confused");
+            setAgentMessage(
+              "I don't see any output. Did you forget to call your function or use print()?",
+            );
+            setLastResult({
+              isCorrect: false,
+              output: ["No output produced."],
+              runtime,
+              status: "Error",
+            });
+            setConsoleTab("result");
+            return;
+          }
+
+          const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
+          const expected = selectedTestCase.expectedOutput.trim();
+          const isCorrect = hasTestCases
+            ? problem.id === "fizzbuzz"
+              ? problem.validator(finalOutput)
+              : lastOutput === expected
+            : finalOutput.length > 0;
+
+          setLastResult({
+            isCorrect,
+            output: finalOutput,
+            runtime,
+            status: isCorrect ? "Accepted" : "Wrong Answer",
+          });
+          setConsoleTab("result");
+
+          if (isCorrect) {
+            setAgentState("happy");
+            setAgentMessage(
+              `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
+            );
+          } else {
+            setAgentState("talking");
+            setAgentMessage(
+              "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
+            );
+          }
+        },
+        (err: unknown) => {
+          setIsRunning(false);
+          const errorMessage = String(err);
+          const finalOutput = [`Error: ${errorMessage}`];
+          setOutput(finalOutput);
           setLastResult({
             isCorrect: false,
-            output: ["No output produced."],
-            runtime,
+            output: finalOutput,
+            runtime: 0,
             status: "Error",
           });
           setConsoleTab("result");
-          return;
-        }
 
-        const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
-        const expected = selectedTestCase.expectedOutput.trim();
-        const isCorrect = hasTestCases
-          ? problem.id === "fizzbuzz"
-            ? problem.validator(finalOutput)
-            : lastOutput === expected
-          : finalOutput.length > 0;
-
-        setLastResult({
-          isCorrect,
-          output: finalOutput,
-          runtime,
-          status: isCorrect ? "Accepted" : "Wrong Answer",
-        });
-        setConsoleTab("result");
-
-        if (isCorrect) {
-          setAgentState("happy");
-          setAgentMessage(
-            `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
-          );
-        } else {
-          setAgentState("talking");
-          setAgentMessage(
-            "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
-          );
-        }
-      },
-      (err: unknown) => {
-        setIsRunning(false);
-        const errorMessage = String(err);
-        const finalOutput = [`Error: ${errorMessage}`];
-        setOutput(finalOutput);
-        setLastResult({
-          isCorrect: false,
-          output: finalOutput,
-          runtime: 0,
-          status: "Error",
-        });
-        setConsoleTab("result");
-
-        if (errorMessage.includes("IndentationError")) {
-          setAgentState("sad");
-          setAgentMessage(
-            "Oops! Python sensitif soal indentasi. Cek lagi spasi di blok fungsi atau loop.",
-          );
-        } else {
-          setAgentState("mad");
-          setAgentMessage("Eksekusi gagal. Lihat detail error di panel hasil.");
-        }
-        setErrorCount((prev) => prev + 1);
-      },
-    )
+          if (errorMessage.includes("IndentationError")) {
+            setAgentState("sad");
+            setAgentMessage(
+              "Oops! Python sensitif soal indentasi. Cek lagi spasi di blok fungsi atau loop.",
+            );
+          } else {
+            setAgentState("mad");
+            setAgentMessage(
+              "Eksekusi gagal. Lihat detail error di panel hasil.",
+            );
+          }
+          setErrorCount((prev) => prev + 1);
+        },
+      )
       .finally(() => {
         if (runOptions?.treatAsSubmission) {
           setSubmitIdleTime(0);
@@ -1640,20 +1668,22 @@ export function ChallengeWorkspace({
                     </div>
                   </motion.div>
                 )}
-                {!idleHelpCheckIn && agentMessage && (!isChatOpen || isMinimized) && (
-                  <motion.div
-                    key={agentMessage}
-                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-[280px]"
-                  >
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                    <p className="text-sm font-black text-emerald-950 leading-relaxed">
-                      {agentMessage}
-                    </p>
-                  </motion.div>
-                )}
+                {!idleHelpCheckIn &&
+                  agentMessage &&
+                  (!isChatOpen || isMinimized) && (
+                    <motion.div
+                      key={agentMessage}
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                      className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-[280px]"
+                    >
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                      <p className="text-sm font-black text-emerald-950 leading-relaxed">
+                        {agentMessage}
+                      </p>
+                    </motion.div>
+                  )}
               </AnimatePresence>
             </div>
           </div>
