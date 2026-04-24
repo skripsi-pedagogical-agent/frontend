@@ -1,5 +1,5 @@
-import React from "react";
-import { motion } from "motion/react";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
   CheckCircle2,
@@ -41,6 +41,25 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   problems,
   onSelectProblem,
 }) => {
+  const catchphrases = [
+    `Siap ngemil baris kode hari ini, ${username}?`,
+    `Waktunya melahap tantangan kode, ${username}!`,
+    `Siap 'ngunyah' kode serenyah bambu, ${username}?`,
+  ];
+
+  const [currentCatchphrase, setCurrentCatchphrase] = useState(catchphrases[0]);
+  const [catchphraseIndex, setCatchphraseIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCatchphraseIndex((prev) => (prev + 1) % catchphrases.length);
+      setCurrentCatchphrase(
+        catchphrases[(catchphraseIndex + 1) % catchphrases.length]
+      );
+    }, 5000); // Ubah catchphrase setiap 5 detik
+
+    return () => clearInterval(interval);
+  }, [catchphraseIndex, catchphrases]);
   return (
     <div className="min-h-screen bg-[#f0f4f2] flex flex-col font-sans text-emerald-950 overflow-y-auto">
       {/* Header */}
@@ -56,7 +75,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               Bamboost
             </h1>
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-1">
-              Main Menu
+              Menu Utama
             </p>
           </div>
         </div>
@@ -64,7 +83,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-xs font-black uppercase tracking-widest text-emerald-600">
-              Welcome,
+              Selamat datang,
             </p>
             <p className="text-lg font-black text-emerald-900 leading-none">
               {username}
@@ -75,7 +94,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             className="px-4 py-2 rounded-xl bg-emerald-700 text-white text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-colors"
             type="button"
           >
-            {isLoggedIn ? "Logout" : "Login"}
+            {isLoggedIn ? "Keluar" : "Masuk"}
           </button>
         </div>
       </header>
@@ -90,14 +109,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div className="flex-1 space-y-6 text-center md:text-left">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-sm">
                 <Sparkles className="w-4 h-4" />
-                Daily Challenge Available
+                Tantangan Harian Tersedia
               </div>
-              <h2 className="text-5xl font-black tracking-tight leading-tight">
-                Ready to chew on some code, {username}?
-              </h2>
+              <AnimatePresence mode="wait">
+                <motion.h2
+                  key={currentCatchphrase}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.5 }}
+                  className="text-5xl font-black tracking-tight leading-tight"
+                >
+                  {currentCatchphrase}
+                </motion.h2>
+              </AnimatePresence>
               <p className="text-white text-lg font-bold max-w-xl">
-                I've prepared a few challenges for you today. Let's practice
-                your Python skills together!
+                Saya telah menyiapkan beberapa tantangan untuk Anda hari ini. Mari berlatih keterampilan Python Anda bersama-sama!
               </p>
             </div>
             <div className="w-48 h-48 bg-white rounded-[3rem] flex items-center justify-center shadow-2xl shrink-0 overflow-hidden">
@@ -113,7 +140,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-black tracking-tight text-emerald-900 flex items-center gap-3">
               <Code2 className="w-8 h-8 text-emerald-700" />
-              Available Challenges
+              Tantangan Tersedia
             </h3>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-600">
               <Terminal className="w-4 h-4" />
