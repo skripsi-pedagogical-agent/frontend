@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import Editor, { type Monaco } from "@monaco-editor/react";
+import { PYTHON_BUILTINS } from "@/src/lib/pythonCompletions";
 
 interface CodeEditorProps {
   code: string;
@@ -20,12 +21,41 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     (monaco: Monaco) => {
       completionProviderRef.current?.dispose();
 
-      completionProviderRef.current = monaco.languages.registerCompletionItemProvider(
-        language,
-        {
-          triggerCharacters: [".", "_"],
+      completionProviderRef.current =
+        monaco.languages.registerCompletionItemProvider(language, {
+          triggerCharacters: [
+            ".",
+            "_",
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+            "h",
+            "i",
+            "j",
+            "k",
+            "l",
+            "m",
+            "n",
+            "o",
+            "p",
+            "q",
+            "r",
+            "s",
+            "t",
+            "u",
+            "v",
+            "w",
+            "x",
+            "y",
+            "z",
+          ],
           provideCompletionItems(model, position) {
             const word = model.getWordUntilPosition(position);
+            const prefix = word.word.toLowerCase();
             const range = {
               startLineNumber: position.lineNumber,
               endLineNumber: position.lineNumber,
@@ -33,75 +63,19 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
               endColumn: word.endColumn,
             };
 
+            // Filter suggestions from PYTHON_BUILTINS based on prefix
+            const filtered = PYTHON_BUILTINS.filter((item) =>
+              item.label.toLowerCase().startsWith(prefix),
+            ).map((item) => ({
+              ...item,
+              range,
+            }));
+
             return {
-              suggestions: [
-                {
-                  label: "def",
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText: "def ${1:function_name}(${2:args}):\n\t${3:pass}",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "Define a function",
-                  range,
-                },
-                {
-                  label: "class",
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText:
-                    "class ${1:ClassName}:\n\tdef __init__(self, ${2:args}):\n\t\t${3:pass}",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "Define a class",
-                  range,
-                },
-                {
-                  label: "if",
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText: "if ${1:condition}:\n\t${2:pass}",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "Conditional block",
-                  range,
-                },
-                {
-                  label: "for",
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText: "for ${1:item} in ${2:iterable}:\n\t${3:pass}",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "For loop",
-                  range,
-                },
-                {
-                  label: "while",
-                  kind: monaco.languages.CompletionItemKind.Snippet,
-                  insertText: "while ${1:condition}:\n\t${2:pass}",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "While loop",
-                  range,
-                },
-                {
-                  label: "return",
-                  kind: monaco.languages.CompletionItemKind.Keyword,
-                  insertText: "return ",
-                  documentation: "Return from function",
-                  range,
-                },
-                {
-                  label: "print",
-                  kind: monaco.languages.CompletionItemKind.Function,
-                  insertText: "print(${1:value})",
-                  insertTextRules:
-                    monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: "Print output to console",
-                  range,
-                },
-              ],
+              suggestions: filtered,
             };
           },
-        },
-      );
+        });
     },
     [language],
   );
