@@ -117,7 +117,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
               <span className="text-[10px] font-black text-emerald-100 uppercase tracking-widest">
-                Tutor Mode
+                Mode Tutor
               </span>
             </div>
           </div>
@@ -158,10 +158,10 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 </div>
                 <div>
                   <p className="text-base font-black text-emerald-950">
-                    Chew on a problem?
+                    Kunyah masalah?
                   </p>
                   <p className="text-xs text-emerald-900 mt-1 font-black">
-                    I'm here to help you plan, debug, or optimize your code!
+                    Saya di sini untuk membantu Anda merencanakan, debug, atau mengoptimalkan kode Anda!
                   </p>
                 </div>
               </div>
@@ -260,7 +260,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Bamboost for a hint..."
+                placeholder="Minta petunjuk dari Bamboost..."
                 className="w-full bg-white border border-emerald-400/50 rounded-2xl py-3.5 pl-5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all placeholder:text-emerald-600/50 font-black text-emerald-950"
               />
               <button
