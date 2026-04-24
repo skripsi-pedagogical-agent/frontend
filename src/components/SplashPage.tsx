@@ -37,13 +37,13 @@ export const SplashPage: React.FC<SplashPageProps> = ({ onComplete }) => {
 
           <div className="space-y-2">
             <h1 className="text-4xl font-black tracking-tight text-emerald-900">Bamboost</h1>
-            <p className="text-emerald-700 font-bold">Your friendly Socratic coding tutor</p>
+            <p className="text-emerald-700 font-bold">Tutor coding Socratic yang ramah Anda</p>
           </div>
 
           <div className="w-full space-y-6">
             <div className="space-y-2 text-left">
               <label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-emerald-600 ml-1">
-                What should I call you?
+                Siapa nama Anda?
               </label>
               <form onSubmit={handleSubmit} className="relative group">
                 <input
@@ -52,7 +52,7 @@ export const SplashPage: React.FC<SplashPageProps> = ({ onComplete }) => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name..."
+                  placeholder="Masukkan nama Anda..."
                   className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-4 px-6 text-lg font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
                 />
                 <button
@@ -67,7 +67,7 @@ export const SplashPage: React.FC<SplashPageProps> = ({ onComplete }) => {
 
             <div className="flex items-center gap-2 justify-center text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">
               <Sparkles className="w-3 h-3" />
-              Ready to chew on some code?
+              Siap untuk mengunyah beberapa kode?
             </div>
           </div>
         </div>

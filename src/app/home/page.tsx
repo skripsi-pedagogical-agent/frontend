@@ -33,7 +33,7 @@ export default function HomePage() {
         } catch (fetchError) {
           console.error("Failed to fetch problems from backend:", fetchError);
           setError(
-            "Failed to load problems. Please check your connection and try again.",
+            "Gagal memuat masalah. Silakan periksa koneksi Anda dan coba lagi.",
           );
           // Keep empty state when backend fails.
           setProblems([]);
@@ -70,14 +70,14 @@ export default function HomePage() {
       <div className="min-h-screen flex items-center justify-center bg-[#f0f4f2]">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
           <h2 className="text-lg font-bold text-red-900 mb-2">
-            Error Loading Problems
+            Kesalahan Memuat Masalah
           </h2>
           <p className="text-red-700 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
           >
-            Retry
+            Coba Lagi
           </button>
         </div>
       </div>
