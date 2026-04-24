@@ -1325,7 +1325,7 @@ export function ChallengeWorkspace({
 
           <div
             style={{ height: `${consoleHeight}px` }}
-            className="bg-[#081410] border-t border-emerald-900/50 flex flex-col flex-shrink-0 overflow-hidden"
+            className="bg-[#081410] border-t border-emerald-900/50 flex flex-col shrink-0 overflow-hidden"
           >
             <div className="h-10 bg-[#0a1a14] px-4 flex items-center gap-4 border-b border-emerald-900/30">
               <button
@@ -1443,7 +1443,7 @@ export function ChallengeWorkspace({
                         <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
                           Test Case
                         </label>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                        <div className="space-y-2 max-h-50 overflow-y-auto custom-scrollbar">
                           {lastResult.judgeResults.map((result, index) => (
                             <button
                               key={result.test_case_id}
@@ -1460,9 +1460,9 @@ export function ChallengeWorkspace({
                             >
                               <div className="flex items-center gap-3">
                                 {result.status === "AC" ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                                 ) : (
-                                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                                 )}
                                 <div className="flex-1">
                                   <div className="text-xs font-bold text-emerald-100">
@@ -1479,7 +1479,7 @@ export function ChallengeWorkspace({
                                     {result.message}
                                   </div>
                                 </div>
-                                <div className="text-right flex-shrink-0">
+                                <div className="text-right shrink-0">
                                   <div className="text-[9px] text-emerald-600 font-bold">
                                     {result.time_used}ms
                                   </div>
@@ -1503,7 +1503,7 @@ export function ChallengeWorkspace({
                               <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
                                 Kesalahan
                               </label>
-                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-[150px] overflow-y-auto custom-scrollbar">
+                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
                                 {
                                   lastResult.judgeResults[
                                     selectedResultTestCaseIndex
@@ -1519,7 +1519,7 @@ export function ChallengeWorkspace({
                                 </label>
                                 <div
                                   className={cn(
-                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar",
+                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar",
                                     lastResult.judgeResults[
                                       selectedResultTestCaseIndex
                                     ].status === "AC"
@@ -1536,7 +1536,7 @@ export function ChallengeWorkspace({
                                 <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
                                   Output yang Diharapkan
                                 </label>
-                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar">
+                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
                                   {lastResult.judgeResults[
                                     selectedResultTestCaseIndex
                                   ].expected || "No expected output"}
@@ -1579,7 +1579,7 @@ export function ChallengeWorkspace({
                           </label>
                           <div
                             className={cn(
-                              "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-[60px]",
+                              "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-15",
                               lastResult.isCorrect
                                 ? "border-emerald-900/30 text-emerald-100"
                                 : "border-red-900/30 text-red-100 bg-red-950/10",
@@ -1594,7 +1594,7 @@ export function ChallengeWorkspace({
                           <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
                             Output yang Diharapkan
                           </label>
-                          <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[60px]">
+                          <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-15">
                             {selectedTestCase.expectedOutput}
                           </div>
                         </div>
@@ -1642,7 +1642,7 @@ export function ChallengeWorkspace({
                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-5 rounded-[2rem] shadow-xl shadow-emerald-900/10 max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
+                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-5 rounded-4xl shadow-xl shadow-emerald-900/10 max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
                   >
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
                     <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
@@ -1694,7 +1694,7 @@ export function ChallengeWorkspace({
                       initial={{ opacity: 0, y: 10, scale: 0.9 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                      className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-[280px]"
+                      className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-70"
                     >
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
                       <p className="text-sm font-black text-emerald-950 leading-relaxed">
