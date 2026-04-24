@@ -51,6 +51,8 @@ type AgentState =
   | "sad"
   | "mad";
 
+const SUBMIT_IDLE_PROMPT_SECONDS = 180;
+
 interface ChallengeWorkspaceProps {
   username: string;
   problem: Problem;
@@ -109,7 +111,9 @@ export function ChallengeWorkspace({
   const [hasClickedMascot, setHasClickedMascot] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  const [idleTime, setIdleTime] = useState(0);
+  const [submitIdleTime, setSubmitIdleTime] = useState(0);
+  const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
+  const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [deletionCount, setDeletionCount] = useState(0);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
@@ -193,7 +197,8 @@ export function ChallengeWorkspace({
     setAgentMessage(null);
     setAgentState("idle");
     setChatMessages([]);
-    setIdleTime(0);
+    setSubmitIdleTime(0);
+    setIdleHelpCheckIn(false);
     setErrorCount(0);
     setDeletionCount(0);
     setIsHistoryLoaded(false);
@@ -400,20 +405,11 @@ export function ChallengeWorkspace({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setIdleTime((prev) => prev + 1);
+      setSubmitIdleTime((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    if (idleTime === 30 && !agentMessage && (!isChatOpen || isMinimized)) {
-      setAgentState("confused");
-      setAgentMessage(
-        "Need a hand with the logic? I can give you a hint in chat.",
-      );
-    }
-  }, [agentMessage, idleTime, isChatOpen, isMinimized]);
 
   // Effect untuk error burst intervention
   useEffect(() => {
@@ -483,74 +479,113 @@ export function ChallengeWorkspace({
   ]);
 
   useEffect(() => {
-    if (isInteractionLocked) return;
-
-    const shouldTriggerOnIdleThreshold =
-      idleTime > 0 &&
-      idleTime >= 90 &&
-      Math.floor(idleTime / 90) >
-        Math.floor(lastIdleTriggerTimeRef.current / 90);
-
-    if (!shouldTriggerOnIdleThreshold) {
+    if (isInteractionLocked || !isBackendProblem || idleHelpCheckIn) {
       return;
     }
 
-    lastIdleTriggerTimeRef.current = idleTime;
+    const shouldPromptSubmitIdle =
+      submitIdleTime > 0 &&
+      submitIdleTime >= SUBMIT_IDLE_PROMPT_SECONDS &&
+      Math.floor(submitIdleTime / SUBMIT_IDLE_PROMPT_SECONDS) >
+        Math.floor(
+          lastIdleTriggerTimeRef.current / SUBMIT_IDLE_PROMPT_SECONDS,
+        );
 
-    const triggerIdleHint = async () => {
-      try {
-        if (isBackendProblem) {
-          const authUser = getStoredAuthUser();
+    if (!shouldPromptSubmitIdle) {
+      return;
+    }
 
-          if (authUser?.id) {
-            const response = await triggerAgentSystemIntervention({
-              user_id: authUser.id,
-              problem_id: problem.id,
-              current_user_code: code,
-              trigger_type: "inactivity",
-              trigger_payload: { idle_seconds: idleTime },
-            });
+    lastIdleTriggerTimeRef.current = submitIdleTime;
+    setAgentMessage(null);
+    setAgentState("idle");
+    setIdleHelpCheckIn(true);
+  }, [
+    submitIdleTime,
+    isInteractionLocked,
+    isBackendProblem,
+    idleHelpCheckIn,
+  ]);
 
-            const newMessage: Message = {
-              id: response.ai_message.id,
-              role: "assistant",
-              content: response.ai_message.message,
-              type: "observational",
-              timestamp: new Date(response.ai_message.created_at),
-            };
+  const handleIdleHelpChoiceNo = useCallback(() => {
+    setIdleHelpCheckIn(false);
+    setSubmitIdleTime(0);
+    lastIdleTriggerTimeRef.current = 0;
+    setAgentState("idle");
+  }, []);
 
-            // Only show message AFTER successful response
-            setAgentState("stuck");
-            setAgentMessage(
-              `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-            );
-            setChatMessages((prev) => [...prev, newMessage]);
-            setIsChatOpen(true);
-            setHasClickedMascot(true);
-            setAgentState("talking");
-            return;
-          }
-        }
-      } catch {
-        setAgentState("sad");
-        setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
+  const handleIdleHelpChoiceYes = useCallback(async () => {
+    if (!isBackendProblem || isInteractionLocked) {
+      setIdleHelpCheckIn(false);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+      return;
+    }
+
+    setIsIdleHelpSubmitting(true);
+    const idleSnapshot = submitIdleTime;
+
+    try {
+      const authUser = getStoredAuthUser();
+
+      if (!authUser?.id) {
+        throw new Error("Missing auth user");
       }
-    };
 
-    if (idleTime > 0 && idleTime % 5 === 0) {
-      void triggerIdleHint();
+      const response = await triggerAgentSystemIntervention({
+        user_id: authUser.id,
+        problem_id: problem.id,
+        current_user_code: codeRef.current,
+        trigger_type: "inactivity",
+        trigger_payload: {
+          idle_seconds: idleSnapshot,
+          submit_idle_seconds: idleSnapshot,
+        },
+      });
+
+      const newMessage: Message = {
+        id: response.ai_message.id,
+        role: "assistant",
+        content: response.ai_message.message,
+        type: "observational",
+        timestamp: new Date(response.ai_message.created_at),
+      };
+
+      setIdleHelpCheckIn(false);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+      setAgentState("stuck");
+      setAgentMessage(
+        `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+      );
+      setChatMessages((prev) => [...prev, newMessage]);
+      setIsChatOpen(true);
+      setHasClickedMascot(true);
+      setAgentState("talking");
+    } catch {
+      setAgentState("sad");
+      setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
+      setIdleHelpCheckIn(false);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+    } finally {
+      setIsIdleHelpSubmitting(false);
     }
   }, [
-    code,
-    idleTime,
     isBackendProblem,
-    problem.id,
-    username,
     isInteractionLocked,
+    problem.id,
+    submitIdleTime,
+    username,
   ]);
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined || isInteractionLocked) return;
+
+    if (idleHelpCheckIn) {
+      setIdleHelpCheckIn(false);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+    }
 
     hasUserTypedRef.current = true;
 
@@ -561,7 +596,6 @@ export function ChallengeWorkspace({
 
     setCode(newCode);
     lastCodeLength.current = newCode.length;
-    setIdleTime(0);
 
     if (
       ["stuck", "talking", "sad", "confused", "mad"].includes(agentState) ||
@@ -572,7 +606,10 @@ export function ChallengeWorkspace({
     }
   };
 
-  const runCode = (testCaseInput?: string) => {
+  const runCode = (
+    testCaseInput?: string,
+    runOptions?: { treatAsSubmission?: boolean },
+  ) => {
     const isBackendProblem =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         problem.id,
@@ -804,7 +841,12 @@ export function ChallengeWorkspace({
         }
         setErrorCount((prev) => prev + 1);
       },
-    );
+    )
+      .finally(() => {
+        if (runOptions?.treatAsSubmission) {
+          setSubmitIdleTime(0);
+        }
+      });
   };
 
   const submitCode = async () => {
@@ -814,7 +856,7 @@ export function ChallengeWorkspace({
       );
 
     if (!isBackendProblem) {
-      runCode();
+      runCode(undefined, { treatAsSubmission: true });
       return;
     }
 
@@ -923,6 +965,7 @@ export function ChallengeWorkspace({
       setErrorCount((prev) => prev + 1);
     } finally {
       setIsRunning(false);
+      setSubmitIdleTime(0);
     }
   };
 
@@ -995,6 +1038,9 @@ export function ChallengeWorkspace({
     latestStatusIdRef.current = 1;
     setAgentState("happy");
     setAgentMessage("Reattempt aktif. Kamu bisa edit code dan chat lagi.");
+    setIdleHelpCheckIn(false);
+    setSubmitIdleTime(0);
+    lastIdleTriggerTimeRef.current = 0;
 
     if (!isBackendProblem) {
       return;
@@ -1099,10 +1145,12 @@ export function ChallengeWorkspace({
             <div
               className={cn(
                 "w-2 h-2 rounded-full",
-                idleTime > 30 ? "bg-amber-700 animate-pulse" : "bg-emerald-700",
+                submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
+                  ? "bg-amber-700 animate-pulse"
+                  : "bg-emerald-700",
               )}
             />
-            Idle: {idleTime}s | Errors: {errorCount}
+            Idle: {submitIdleTime}s | Errors: {errorCount}
           </div>
           <button
             className="p-2 hover:bg-emerald-300/50 rounded-full transition-colors"
@@ -1542,7 +1590,57 @@ export function ChallengeWorkspace({
               </button>
 
               <AnimatePresence mode="wait">
-                {agentMessage && (!isChatOpen || isMinimized) && (
+                {idleHelpCheckIn && (!isChatOpen || isMinimized) && (
+                  <motion.div
+                    key="idle-help-check-in"
+                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-5 rounded-[2rem] shadow-xl shadow-emerald-900/10 max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
+                  >
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                    <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
+                      Sudah cukup lama tanpa submit. Butuh bantuan?
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={handleIdleHelpChoiceNo}
+                        className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        Tidak, saya lagi memahami soal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={handleIdleHelpChoiceNo}
+                        className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        Tidak, saya lagi memikirkan logika
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={handleIdleHelpChoiceNo}
+                        className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        Tidak, saya sedang mengerjakan soal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={() => void handleIdleHelpChoiceYes()}
+                        className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                      >
+                        {isIdleHelpSubmitting
+                          ? "Memuat…"
+                          : "Ya, saya butuh bantuan"}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+                {!idleHelpCheckIn && agentMessage && (!isChatOpen || isMinimized) && (
                   <motion.div
                     key={agentMessage}
                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
