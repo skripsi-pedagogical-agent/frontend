@@ -1337,7 +1337,7 @@ export function ChallengeWorkspace({
               </div>
 
               <div className="prose prose-emerald max-w-none">
-                <p className="text-emerald-950 font-semibold leading-relaxed whitespace-pre-wrap text-sm">
+                <p className="text-emerald-950 font-bold leading-relaxed whitespace-pre-wrap text-sm">
                   {problem.description}
                 </p>
               </div>
