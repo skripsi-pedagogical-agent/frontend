@@ -55,7 +55,7 @@ type AgentState =
   | "sad"
   | "mad";
 
-const SUBMIT_IDLE_PROMPT_SECONDS = 2;
+const SUBMIT_IDLE_PROMPT_SECONDS = 180;
 
 const FALLBACK_IDLE_REASONS: IdleReason[] = [
   {
