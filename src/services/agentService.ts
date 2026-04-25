@@ -12,6 +12,20 @@ export interface AgentChatMessage {
   created_at: string;
 }
 
+export interface IdleReason {
+  id: string;
+  code: string;
+  description: string;
+  created_at: string;
+}
+
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 interface TriggerSystemRequest {
   user_id: string;
   problem_id: string;
@@ -23,6 +37,11 @@ interface TriggerSystemRequest {
 interface TriggerSystemResponse {
   ai_message: AgentChatMessage;
   hint_intervention_id: string;
+}
+
+interface ProblemIdleReasonRequest {
+  reason_id: string;
+  problem_id: string;
 }
 
 interface SendChatRequest {
@@ -152,4 +171,33 @@ export async function getAgentChatHistory(
   }
 
   return (await response.json()) as AgentChatMessage[];
+}
+
+export async function getIdleReasons(): Promise<IdleReason[]> {
+  const response = await authorizedFetch(buildApiUrl("api/idle-reasons/"), {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Get idle reasons failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as PaginatedResponse<IdleReason>;
+  return payload.results;
+}
+
+export async function submitProblemIdleReason(
+  payload: ProblemIdleReasonRequest,
+): Promise<void> {
+  const response = await authorizedFetch(
+    buildApiUrl("api/problem-idle-reason/"),
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Submit problem idle reason failed: ${response.status}`);
+  }
 }
