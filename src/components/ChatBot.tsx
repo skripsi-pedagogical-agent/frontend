@@ -4,6 +4,36 @@ import { Send, User, Sparkles, X, Minimize2, Maximize2 } from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import ReactMarkdown, { Components } from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+const MarkdownComponents: Components = {
+  code({ node, inline, className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || "");
+    return !inline && match ? (
+      <SyntaxHighlighter
+        {...props}
+        style={vscDarkPlus as any}
+        language={match[1]}
+        PreTag="div"
+        className="rounded-lg !my-2 text-xs"
+      >
+        {String(children).replace(/\n$/, "")}
+      </SyntaxHighlighter>
+    ) : (
+      <code
+        {...props}
+        className={cn(
+          className,
+          "bg-black/10 px-1 py-0.5 rounded font-mono text-xs",
+        )}
+      >
+        {children}
+      </code>
+    );
+  },
+};
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -161,7 +191,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     Kunyah masalah?
                   </p>
                   <p className="text-xs text-emerald-900 mt-1 font-black">
-                    Saya di sini untuk membantu Anda merencanakan, debug, atau mengoptimalkan kode Anda!
+                    Saya di sini untuk membantu Anda merencanakan, debug, atau
+                    mengoptimalkan kode Anda!
                   </p>
                 </div>
               </div>
@@ -203,13 +234,15 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                   )}
                   <div
                     className={cn(
-                      "p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm font-bold",
+                      "p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm font-bold overflow-hidden space-y-2",
                       msg.role === "user"
                         ? "bg-emerald-800 text-white rounded-tr-none"
                         : "bg-white text-emerald-950 border border-emerald-300/50 rounded-tl-none",
                     )}
                   >
-                    {msg.content}
+                    <ReactMarkdown components={MarkdownComponents}>
+                      {msg.content}
+                    </ReactMarkdown>
                   </div>
                   <span className="text-[9px] font-black text-emerald-700 px-1">
                     {msg.timestamp.toLocaleTimeString([], {
@@ -263,7 +296,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 placeholder={
                   disabled
                     ? "Tantangan telah selesai. Klik Reattempt untuk mengobrol kembali."
-               
                     : "Minta petunjuk dari Bamboost..."
                 }
                 disabled={disabled}
