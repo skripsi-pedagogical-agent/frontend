@@ -736,12 +736,6 @@ export function ChallengeWorkspace({
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined || isInteractionLocked) return;
 
-    if (idleHelpCheckIn) {
-      setIdleHelpCheckIn(false);
-      setSubmitIdleTime(0);
-      lastIdleTriggerTimeRef.current = 0;
-    }
-
     hasUserTypedRef.current = true;
 
     const diff = lastCodeLength.current - newCode.length;
@@ -1289,17 +1283,19 @@ export function ChallengeWorkspace({
               </span>
             </div>
           )}
-          <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
-            <div
-              className={cn(
-                "w-2 h-2 rounded-full",
-                submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
-                  ? "bg-amber-700 animate-pulse"
-                  : "bg-emerald-700",
-              )}
-            />
-            Idle: {submitIdleTime}s | Errors: {errorCount}
-          </div>
+          {!isInteractionLocked && (
+            <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
+              <div
+                className={cn(
+                  "w-2 h-2 rounded-full",
+                  submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
+                    ? "bg-amber-700 animate-pulse"
+                    : "bg-emerald-700",
+                )}
+              />
+              Idle: {submitIdleTime}s | Errors: {errorCount}
+            </div>
+          )}
           <button
             className="p-2 hover:bg-emerald-300/50 rounded-full transition-colors"
             type="button"
@@ -1341,7 +1337,7 @@ export function ChallengeWorkspace({
               </div>
 
               <div className="prose prose-emerald max-w-none">
-                <p className="text-emerald-950 font-black leading-relaxed whitespace-pre-wrap text-sm">
+                <p className="text-emerald-950 font-semibold leading-relaxed whitespace-pre-wrap text-sm">
                   {problem.description}
                 </p>
               </div>
