@@ -26,7 +26,10 @@ import type { Problem } from "@/src/lib/problems";
 import { getStoredAuthUser } from "@/src/services/authService";
 import {
   getAgentChatHistory,
+  getIdleReasons,
+  type IdleReason,
   sendAgentChatMessage,
+  submitProblemIdleReason,
   triggerAgentSystemIntervention,
 } from "@/src/services/agentService";
 import {
@@ -34,6 +37,7 @@ import {
   type EditorSessionStatusId,
   upsertEditorSession,
 } from "@/src/services/editorSessionService";
+import { logTelemetry } from "@/src/services/telemetryService";
 // @ts-ignore
 import Sk from "skulpt";
 
@@ -50,6 +54,35 @@ type AgentState =
   | "confused"
   | "sad"
   | "mad";
+
+const SUBMIT_IDLE_PROMPT_SECONDS = 2;
+
+const FALLBACK_IDLE_REASONS: IdleReason[] = [
+  {
+    id: "still-understanding",
+    code: "still-understanding",
+    description: "Tidak, saya lagi memahami soal",
+    created_at: "",
+  },
+  {
+    id: "still-thinking",
+    code: "still-thinking",
+    description: "Tidak, saya lagi memikirkan logika",
+    created_at: "",
+  },
+  {
+    id: "still-doing",
+    code: "still-doing",
+    description: "Tidak, saya sedang mengerjakan soal",
+    created_at: "",
+  },
+  {
+    id: "stuck",
+    code: "stuck",
+    description: "Ya, saya butuh bantuan",
+    created_at: "",
+  },
+];
 
 interface ChallengeWorkspaceProps {
   username: string;
@@ -109,7 +142,12 @@ export function ChallengeWorkspace({
   const [hasClickedMascot, setHasClickedMascot] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  const [idleTime, setIdleTime] = useState(0);
+  const [submitIdleTime, setSubmitIdleTime] = useState(0);
+  const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
+  const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
+  const [idleReasons, setIdleReasons] = useState<IdleReason[]>(
+    FALLBACK_IDLE_REASONS,
+  );
   const [errorCount, setErrorCount] = useState(0);
   const [deletionCount, setDeletionCount] = useState(0);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
@@ -119,6 +157,7 @@ export function ChallengeWorkspace({
   const codeRef = useRef(code);
   const hasUserTypedRef = useRef(false);
   const latestStatusIdRef = useRef<EditorSessionStatusId>(1);
+  const latestSessionIdRef = useRef<string | null>(null);
   const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -167,6 +206,7 @@ export function ChallengeWorkspace({
           { keepalive: options?.keepalive },
         );
 
+        latestSessionIdRef.current = saved.id;
         lastSavedSignatureRef.current = `${saved.status_id}:${saved.code}`;
       } catch (error) {
         console.error("Failed to save editor session:", error);
@@ -193,7 +233,8 @@ export function ChallengeWorkspace({
     setAgentMessage(null);
     setAgentState("idle");
     setChatMessages([]);
-    setIdleTime(0);
+    setSubmitIdleTime(0);
+    setIdleHelpCheckIn(false);
     setErrorCount(0);
     setDeletionCount(0);
     setIsHistoryLoaded(false);
@@ -233,6 +274,7 @@ export function ChallengeWorkspace({
           return;
         }
 
+        latestSessionIdRef.current = session.id;
         lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
         latestStatusIdRef.current = session.status_id;
         setIsInteractionLocked(session.status_id === 2);
@@ -256,6 +298,34 @@ export function ChallengeWorkspace({
       isCancelled = true;
     };
   }, [isBackendProblem, problem.id]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadIdleReasons = async () => {
+      if (!isBackendProblem) {
+        return;
+      }
+
+      try {
+        const reasons = await getIdleReasons();
+
+        if (isCancelled || reasons.length === 0) {
+          return;
+        }
+
+        setIdleReasons(reasons);
+      } catch (error) {
+        console.error("Failed to load idle reasons:", error);
+      }
+    };
+
+    void loadIdleReasons();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isBackendProblem]);
 
   useEffect(() => {
     if (
@@ -400,20 +470,24 @@ export function ChallengeWorkspace({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setIdleTime((prev) => prev + 1);
+      setSubmitIdleTime((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (idleTime === 30 && !agentMessage && (!isChatOpen || isMinimized)) {
+    if (
+      submitIdleTime === 30 &&
+      !agentMessage &&
+      (!isChatOpen || isMinimized)
+    ) {
       setAgentState("confused");
       setAgentMessage(
         "Butuh bantuan dengan logika? Saya bisa beri petunjuk di chat.",
       );
     }
-  }, [agentMessage, idleTime, isChatOpen, isMinimized]);
+  }, [agentMessage, submitIdleTime, isChatOpen, isMinimized]);
 
   // Effect untuk error burst intervention
   useEffect(() => {
@@ -445,6 +519,17 @@ export function ChallengeWorkspace({
               trigger_type: "error_burst",
               trigger_payload: { error_count: errorCount },
             });
+
+            if (latestSessionIdRef.current) {
+              void logTelemetry({
+                problem: problem.id,
+                session_id: latestSessionIdRef.current,
+                action_type: "STUCK_ERROR_DETECTED",
+                hint_type: "",
+                code_snapshot: code,
+                metadata: JSON.stringify({ error_count: errorCount }),
+              });
+            }
 
             const newMessage: Message = {
               id: response.ai_message.id,
@@ -483,74 +568,180 @@ export function ChallengeWorkspace({
   ]);
 
   useEffect(() => {
-    if (isInteractionLocked) return;
-
-    const shouldTriggerOnIdleThreshold =
-      idleTime > 0 &&
-      idleTime >= 90 &&
-      Math.floor(idleTime / 90) >
-        Math.floor(lastIdleTriggerTimeRef.current / 90);
-
-    if (!shouldTriggerOnIdleThreshold) {
+    if (isInteractionLocked || !isBackendProblem || idleHelpCheckIn) {
       return;
     }
 
-    lastIdleTriggerTimeRef.current = idleTime;
+    const shouldPromptSubmitIdle =
+      submitIdleTime > 0 &&
+      submitIdleTime >= SUBMIT_IDLE_PROMPT_SECONDS &&
+      Math.floor(submitIdleTime / SUBMIT_IDLE_PROMPT_SECONDS) >
+        Math.floor(lastIdleTriggerTimeRef.current / SUBMIT_IDLE_PROMPT_SECONDS);
 
-    const triggerIdleHint = async () => {
+    if (!shouldPromptSubmitIdle) {
+      return;
+    }
+
+    if (latestSessionIdRef.current) {
+      void logTelemetry({
+        problem: problem.id,
+        session_id: latestSessionIdRef.current,
+        action_type: "STUCK_IDLE_DETECTED",
+        hint_type: "",
+        code_snapshot: codeRef.current,
+        metadata: JSON.stringify({ idle_seconds: submitIdleTime }),
+      });
+    }
+
+    lastIdleTriggerTimeRef.current = submitIdleTime;
+    setAgentMessage(null);
+    setAgentState("idle");
+    setIdleHelpCheckIn(true);
+  }, [
+    submitIdleTime,
+    isInteractionLocked,
+    isBackendProblem,
+    idleHelpCheckIn,
+    problem.id,
+  ]);
+
+  const handleIdleHelpChoiceNo = useCallback(
+    async (reason: IdleReason) => {
+      setIsIdleHelpSubmitting(true);
+
       try {
         if (isBackendProblem) {
-          const authUser = getStoredAuthUser();
+          await submitProblemIdleReason({
+            reason_id: reason.id,
+            problem_id: problem.id,
+          });
 
-          if (authUser?.id) {
-            const response = await triggerAgentSystemIntervention({
-              user_id: authUser.id,
-              problem_id: problem.id,
-              current_user_code: code,
-              trigger_type: "inactivity",
-              trigger_payload: { idle_seconds: idleTime },
+          if (latestSessionIdRef.current) {
+            void logTelemetry({
+              problem: problem.id,
+              session_id: latestSessionIdRef.current,
+              action_type: "IDLE_REASON_SELECTED",
+              hint_type: "",
+              code_snapshot: codeRef.current,
+              metadata: JSON.stringify({
+                reason_id: reason.id,
+                reason_code: reason.code,
+                reason_description: reason.description,
+                choice_type: "no",
+              }),
             });
-
-            const newMessage: Message = {
-              id: response.ai_message.id,
-              role: "assistant",
-              content: response.ai_message.message,
-              type: "observational",
-              timestamp: new Date(response.ai_message.created_at),
-            };
-
-            // Only show message AFTER successful response
-            setAgentState("stuck");
-            setAgentMessage(
-              `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-            );
-            setChatMessages((prev) => [...prev, newMessage]);
-            setIsChatOpen(true);
-            setHasClickedMascot(true);
-            setAgentState("talking");
-            return;
           }
         }
+      } catch (error) {
+        console.error("Failed to submit idle reason:", error);
+      } finally {
+        setIdleHelpCheckIn(false);
+        setSubmitIdleTime(0);
+        lastIdleTriggerTimeRef.current = 0;
+        setAgentState("idle");
+        setIsIdleHelpSubmitting(false);
+      }
+    },
+    [isBackendProblem, problem.id],
+  );
+
+  const handleIdleHelpChoiceYes = useCallback(
+    async (reason: IdleReason) => {
+      if (!isBackendProblem || isInteractionLocked) {
+        setIdleHelpCheckIn(false);
+        setSubmitIdleTime(0);
+        lastIdleTriggerTimeRef.current = 0;
+        return;
+      }
+
+      setIsIdleHelpSubmitting(true);
+      const idleSnapshot = submitIdleTime;
+
+      try {
+        const authUser = getStoredAuthUser();
+
+        if (!authUser?.id) {
+          throw new Error("Missing auth user");
+        }
+
+        await submitProblemIdleReason({
+          reason_id: reason.id,
+          problem_id: problem.id,
+        });
+
+        if (latestSessionIdRef.current) {
+          void logTelemetry({
+            problem: problem.id,
+            session_id: latestSessionIdRef.current,
+            action_type: "IDLE_REASON_SELECTED",
+            hint_type: "",
+            code_snapshot: codeRef.current,
+            metadata: JSON.stringify({
+              reason_id: reason.id,
+              reason_code: reason.code,
+              reason_description: reason.description,
+              choice_type: "yes",
+            }),
+          });
+        }
+
+        const response = await triggerAgentSystemIntervention({
+          user_id: authUser.id,
+          problem_id: problem.id,
+          current_user_code: codeRef.current,
+          trigger_type: "inactivity",
+          trigger_payload: {
+            idle_seconds: idleSnapshot,
+            submit_idle_seconds: idleSnapshot,
+          },
+        });
+
+        const newMessage: Message = {
+          id: response.ai_message.id,
+          role: "assistant",
+          content: response.ai_message.message,
+          type: "observational",
+          timestamp: new Date(response.ai_message.created_at),
+        };
+
+        setIdleHelpCheckIn(false);
+        setSubmitIdleTime(0);
+        lastIdleTriggerTimeRef.current = 0;
+        setAgentState("stuck");
+        setAgentMessage(
+          `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
+        );
+        setChatMessages((prev) => [...prev, newMessage]);
+        setIsChatOpen(true);
+        setHasClickedMascot(true);
+        setAgentState("talking");
       } catch {
         setAgentState("sad");
         setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
+        setIdleHelpCheckIn(false);
+        setSubmitIdleTime(0);
+        lastIdleTriggerTimeRef.current = 0;
+      } finally {
+        setIsIdleHelpSubmitting(false);
       }
-    };
-
-    if (idleTime > 0 && idleTime % 5 === 0) {
-      void triggerIdleHint();
-    }
-  }, [
-    code,
-    idleTime,
-    isBackendProblem,
-    problem.id,
-    username,
-    isInteractionLocked,
-  ]);
+    },
+    [
+      isBackendProblem,
+      isInteractionLocked,
+      problem.id,
+      submitIdleTime,
+      username,
+    ],
+  );
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined || isInteractionLocked) return;
+
+    if (idleHelpCheckIn) {
+      setIdleHelpCheckIn(false);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+    }
 
     hasUserTypedRef.current = true;
 
@@ -561,7 +752,6 @@ export function ChallengeWorkspace({
 
     setCode(newCode);
     lastCodeLength.current = newCode.length;
-    setIdleTime(0);
 
     if (
       ["stuck", "talking", "sad", "confused", "mad"].includes(agentState) ||
@@ -572,7 +762,10 @@ export function ChallengeWorkspace({
     }
   };
 
-  const runCode = (testCaseInput?: string) => {
+  const runCode = (
+    testCaseInput?: string,
+    runOptions?: { treatAsSubmission?: boolean },
+  ) => {
     const isBackendProblem =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         problem.id,
@@ -731,86 +924,94 @@ export function ChallengeWorkspace({
       return Sk.importMainWithBody("<stdin>", false, codeToRun, true);
     });
 
-    runPromise.then(
-      () => {
-        const runtime = Math.round(performance.now() - startTime);
-        if (currentLine) outputBuffer.push(currentLine);
+    runPromise
+      .then(
+        () => {
+          const runtime = Math.round(performance.now() - startTime);
+          if (currentLine) outputBuffer.push(currentLine);
 
-        setIsRunning(false);
-        const finalOutput = outputBuffer.filter((line) => line.trim() !== "");
-        setOutput(finalOutput);
+          setIsRunning(false);
+          const finalOutput = outputBuffer.filter((line) => line.trim() !== "");
+          setOutput(finalOutput);
 
-        if (finalOutput.length === 0) {
-          // Remove mascot reaction for no output
-          // setAgentState("confused");
-          // setAgentMessage(
-          //   "Saya tidak melihat output apapun. Apakah Anda lupa memanggil fungsi atau menggunakan print()?",
-          // );
+          if (finalOutput.length === 0) {
+            // Remove mascot reaction for no output
+            // setAgentState("confused");
+            // setAgentMessage(
+            //   "Saya tidak melihat output apapun. Apakah Anda lupa memanggil fungsi atau menggunakan print()?",
+            // );
+            setLastResult({
+              isCorrect: false,
+              output: ["Tidak ada output yang dihasilkan."],
+              runtime,
+              status: "Error",
+            });
+            setConsoleTab("result");
+            return;
+          }
+
+          const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
+          const expected = selectedTestCase.expectedOutput.trim();
+          const isCorrect = hasTestCases
+            ? problem.id === "fizzbuzz"
+              ? problem.validator(finalOutput)
+              : lastOutput === expected
+            : finalOutput.length > 0;
+
+          setLastResult({
+            isCorrect,
+            output: finalOutput,
+            runtime,
+            status: isCorrect ? "Accepted" : "Wrong Answer",
+          });
+          setConsoleTab("result");
+
+          if (isCorrect) {
+            // Remove mascot reaction for successful runs
+            // setAgentState("happy");
+            // setAgentMessage(
+            //   `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
+            // );
+          } else {
+            // Remove mascot reaction for wrong answers
+            // setAgentState("talking");
+            // setAgentMessage(
+            //   "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
+            // );
+          }
+        },
+        (err: unknown) => {
+          setIsRunning(false);
+          const errorMessage = String(err);
+          const finalOutput = [`Error: ${errorMessage}`];
+          setOutput(finalOutput);
           setLastResult({
             isCorrect: false,
-            output: ["Tidak ada output yang dihasilkan."],
-            runtime,
+            output: finalOutput,
+            runtime: 0,
             status: "Error",
           });
           setConsoleTab("result");
-          return;
+
+          if (errorMessage.includes("IndentationError")) {
+            setAgentState("sad");
+            setAgentMessage(
+              "Oops! Python sensitif soal indentasi. Cek lagi spasi di blok fungsi atau loop.",
+            );
+          } else {
+            setAgentState("mad");
+            setAgentMessage(
+              "Eksekusi gagal. Lihat detail error di panel hasil.",
+            );
+          }
+          setErrorCount((prev) => prev + 1);
+        },
+      )
+      .finally(() => {
+        if (runOptions?.treatAsSubmission) {
+          setSubmitIdleTime(0);
         }
-
-        const lastOutput = finalOutput[finalOutput.length - 1]?.trim() ?? "";
-        const expected = selectedTestCase.expectedOutput.trim();
-        const isCorrect = hasTestCases
-          ? problem.id === "fizzbuzz"
-            ? problem.validator(finalOutput)
-            : lastOutput === expected
-          : finalOutput.length > 0;
-
-        setLastResult({
-          isCorrect,
-          output: finalOutput,
-          runtime,
-          status: isCorrect ? "Accepted" : "Wrong Answer",
-        });
-        setConsoleTab("result");
-
-        if (isCorrect) {
-          // Remove mascot reaction for successful runs
-          // setAgentState("happy");
-          // setAgentMessage(
-          //   `Excellent ${username}! Logic kamu sudah benar untuk test case ini.`,
-          // );
-        } else {
-          // Remove mascot reaction for wrong answers
-          // setAgentState("talking");
-          // setAgentMessage(
-          //   "Output kamu belum sesuai expected result. Kita cek step-by-step ya.",
-          // );
-        }
-      },
-      (err: unknown) => {
-        setIsRunning(false);
-        const errorMessage = String(err);
-        const finalOutput = [`Error: ${errorMessage}`];
-        setOutput(finalOutput);
-        setLastResult({
-          isCorrect: false,
-          output: finalOutput,
-          runtime: 0,
-          status: "Error",
-        });
-        setConsoleTab("result");
-
-        if (errorMessage.includes("IndentationError")) {
-          setAgentState("sad");
-          setAgentMessage(
-            "Oops! Python sensitif soal indentasi. Cek lagi spasi di blok fungsi atau loop.",
-          );
-        } else {
-          setAgentState("mad");
-          setAgentMessage("Eksekusi gagal. Lihat detail error di panel hasil.");
-        }
-        setErrorCount((prev) => prev + 1);
-      },
-    );
+      });
   };
 
   const submitCode = async () => {
@@ -820,7 +1021,7 @@ export function ChallengeWorkspace({
       );
 
     if (!isBackendProblem) {
-      runCode();
+      runCode(undefined, { treatAsSubmission: true });
       return;
     }
 
@@ -858,7 +1059,9 @@ export function ChallengeWorkspace({
       const finalOutput =
         outputLines.length > 0
           ? outputLines
-          : ["Pengiriman diproses, tetapi tidak ada output yang dikembalikan oleh backend."];
+          : [
+              "Pengiriman diproses, tetapi tidak ada output yang dikembalikan oleh backend.",
+            ];
 
       const judgeResults = submission.judge_result.results.map((result) => ({
         status: result.status,
@@ -932,6 +1135,7 @@ export function ChallengeWorkspace({
       setErrorCount((prev) => prev + 1);
     } finally {
       setIsRunning(false);
+      setSubmitIdleTime(0);
     }
   };
 
@@ -1004,6 +1208,9 @@ export function ChallengeWorkspace({
     latestStatusIdRef.current = 1;
     setAgentState("happy");
     setAgentMessage("Reattempt aktif. Kamu bisa edit code dan chat lagi.");
+    setIdleHelpCheckIn(false);
+    setSubmitIdleTime(0);
+    lastIdleTriggerTimeRef.current = 0;
 
     if (!isBackendProblem) {
       return;
@@ -1063,6 +1270,14 @@ export function ChallengeWorkspace({
     };
   }, [resize, stopResizing]);
 
+  const idleHelpYesReason =
+    idleReasons.find((reason) => reason.code === "stuck") ??
+    FALLBACK_IDLE_REASONS.find((reason) => reason.code === "stuck");
+
+  const idleHelpNoReasons = idleReasons.filter(
+    (reason) => reason.code !== "stuck",
+  );
+
   return (
     <div className="h-screen bg-[#a8b4af] flex flex-col font-sans text-emerald-950 overflow-hidden">
       <header className="h-16 bg-[#f0f4f2] border-b border-emerald-500/30 px-6 flex items-center justify-between shadow-sm z-10 shrink-0">
@@ -1108,10 +1323,12 @@ export function ChallengeWorkspace({
             <div
               className={cn(
                 "w-2 h-2 rounded-full",
-                idleTime > 30 ? "bg-amber-700 animate-pulse" : "bg-emerald-700",
+                submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
+                  ? "bg-amber-700 animate-pulse"
+                  : "bg-emerald-700",
               )}
             />
-            Idle: {idleTime}s | Kesalahan: {errorCount}
+            Idle: {submitIdleTime}s | Errors: {errorCount}
           </div>
           <button
             className="p-2 hover:bg-emerald-300/50 rounded-full transition-colors"
@@ -1185,7 +1402,8 @@ export function ChallengeWorkspace({
               ) : (
                 <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
                   <p className="text-[11px] font-bold text-emerald-800">
-                    Tidak ada contoh test case yang disediakan untuk tantangan ini.
+                    Tidak ada contoh test case yang disediakan untuk tantangan
+                    ini.
                   </p>
                 </div>
               )}
@@ -1240,7 +1458,7 @@ export function ChallengeWorkspace({
 
           <div
             style={{ height: `${consoleHeight}px` }}
-            className="bg-[#081410] border-t border-emerald-900/50 flex flex-col flex-shrink-0 overflow-hidden"
+            className="bg-[#081410] border-t border-emerald-900/50 flex flex-col shrink-0 overflow-hidden"
           >
             <div className="h-10 bg-[#0a1a14] px-4 flex items-center gap-4 border-b border-emerald-900/30">
               <button
@@ -1358,7 +1576,7 @@ export function ChallengeWorkspace({
                         <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
                           Test Case
                         </label>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                        <div className="space-y-2 max-h-50 overflow-y-auto custom-scrollbar">
                           {lastResult.judgeResults.map((result, index) => (
                             <button
                               key={result.test_case_id}
@@ -1375,9 +1593,9 @@ export function ChallengeWorkspace({
                             >
                               <div className="flex items-center gap-3">
                                 {result.status === "AC" ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                                 ) : (
-                                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                                 )}
                                 <div className="flex-1">
                                   <div className="text-xs font-bold text-emerald-100">
@@ -1394,7 +1612,7 @@ export function ChallengeWorkspace({
                                     {result.message}
                                   </div>
                                 </div>
-                                <div className="text-right flex-shrink-0">
+                                <div className="text-right shrink-0">
                                   <div className="text-[9px] text-emerald-600 font-bold">
                                     {result.time_used}ms
                                   </div>
@@ -1418,7 +1636,7 @@ export function ChallengeWorkspace({
                               <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
                                 Kesalahan
                               </label>
-                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-[150px] overflow-y-auto custom-scrollbar">
+                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
                                 {
                                   lastResult.judgeResults[
                                     selectedResultTestCaseIndex
@@ -1434,7 +1652,7 @@ export function ChallengeWorkspace({
                                 </label>
                                 <div
                                   className={cn(
-                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar",
+                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar",
                                     lastResult.judgeResults[
                                       selectedResultTestCaseIndex
                                     ].status === "AC"
@@ -1451,7 +1669,7 @@ export function ChallengeWorkspace({
                                 <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
                                   Output yang Diharapkan
                                 </label>
-                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[80px] max-h-[150px] overflow-y-auto custom-scrollbar">
+                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
                                   {lastResult.judgeResults[
                                     selectedResultTestCaseIndex
                                   ].expected || "No expected output"}
@@ -1494,7 +1712,7 @@ export function ChallengeWorkspace({
                           </label>
                           <div
                             className={cn(
-                              "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-[60px]",
+                              "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-15",
                               lastResult.isCorrect
                                 ? "border-emerald-900/30 text-emerald-100"
                                 : "border-red-900/30 text-red-100 bg-red-950/10",
@@ -1509,7 +1727,7 @@ export function ChallengeWorkspace({
                           <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
                             Output yang Diharapkan
                           </label>
-                          <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-[60px]">
+                          <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-15">
                             {selectedTestCase.expectedOutput}
                           </div>
                         </div>
@@ -1551,20 +1769,63 @@ export function ChallengeWorkspace({
               </button>
 
               <AnimatePresence mode="wait">
-                {agentMessage && (!isChatOpen || isMinimized) && (
+                {idleHelpCheckIn && (!isChatOpen || isMinimized) && (
                   <motion.div
-                    key={agentMessage}
+                    key="idle-help-check-in"
                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-[280px]"
+                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-5 rounded-4xl shadow-xl shadow-emerald-900/10 max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
                   >
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                    <p className="text-sm font-black text-emerald-950 leading-relaxed">
-                      {agentMessage}
+                    <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
+                      Sudah cukup lama tanpa submit. Butuh bantuan?
                     </p>
+                    <div className="flex flex-col gap-2">
+                      {idleHelpNoReasons.map((reason) => (
+                        <button
+                          key={reason.id}
+                          type="button"
+                          disabled={isIdleHelpSubmitting}
+                          onClick={() => void handleIdleHelpChoiceNo(reason)}
+                          className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                        >
+                          {reason.description}
+                        </button>
+                      ))}
+                      {idleHelpYesReason && (
+                        <button
+                          type="button"
+                          disabled={isIdleHelpSubmitting}
+                          onClick={() =>
+                            void handleIdleHelpChoiceYes(idleHelpYesReason)
+                          }
+                          className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                        >
+                          {isIdleHelpSubmitting
+                            ? "Memuat…"
+                            : idleHelpYesReason.description}
+                        </button>
+                      )}
+                    </div>
                   </motion.div>
                 )}
+                {!idleHelpCheckIn &&
+                  agentMessage &&
+                  (!isChatOpen || isMinimized) && (
+                    <motion.div
+                      key={agentMessage}
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                      className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-70"
+                    >
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                      <p className="text-sm font-black text-emerald-950 leading-relaxed">
+                        {agentMessage}
+                      </p>
+                    </motion.div>
+                  )}
               </AnimatePresence>
             </div>
           </div>
