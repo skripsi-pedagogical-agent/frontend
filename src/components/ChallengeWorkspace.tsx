@@ -10,7 +10,6 @@ import {
   HelpCircle,
   MessageSquare,
   Play,
-  RotateCcw,
   Terminal as TerminalIcon,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
@@ -1142,9 +1141,7 @@ export function ChallengeWorkspace({
   const handleSendMessage = async (content: string) => {
     if (isInteractionLocked) {
       setAgentState("idle");
-      setAgentMessage(
-        "Challenge sudah completed. Klik Reattempt untuk chat lagi.",
-      );
+      setAgentMessage("Challenge sudah completed. Chat dinonaktifkan.");
       return;
     }
 
@@ -1202,25 +1199,6 @@ export function ChallengeWorkspace({
       setIsTyping(false);
     }
   };
-
-  const handleReattempt = useCallback(() => {
-    setIsInteractionLocked(false);
-    latestStatusIdRef.current = 1;
-    setAgentState("happy");
-    setAgentMessage("Reattempt aktif. Kamu bisa edit code dan chat lagi.");
-    setIdleHelpCheckIn(false);
-    setSubmitIdleTime(0);
-    lastIdleTriggerTimeRef.current = 0;
-
-    if (!isBackendProblem) {
-      return;
-    }
-
-    void saveEditorSession(codeRef.current, {
-      statusIdOverride: 1,
-      force: true,
-    });
-  }, [isBackendProblem, saveEditorSession]);
 
   const handleBackClick = useCallback(() => {
     if (saveDebounceTimerRef.current) {
@@ -1309,14 +1287,6 @@ export function ChallengeWorkspace({
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">
                 COMPLETED
               </span>
-              <button
-                onClick={handleReattempt}
-                className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-amber-500"
-                type="button"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reattempt
-              </button>
             </div>
           )}
           <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
@@ -1422,7 +1392,7 @@ export function ChallengeWorkspace({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runCode(selectedTestCase.input)}
-                disabled={isRunning}
+                disabled={isRunning || isInteractionLocked}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
                 type="button"
               >
@@ -1431,7 +1401,7 @@ export function ChallengeWorkspace({
               </button>
               <button
                 onClick={() => void submitCode()}
-                disabled={isRunning}
+                disabled={isRunning || isInteractionLocked}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
                 type="button"
               >
@@ -1497,8 +1467,9 @@ export function ChallengeWorkspace({
                       <button
                         key={tc.id}
                         onClick={() => setSelectedTestCaseId(tc.id)}
+                        disabled={isInteractionLocked}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all",
+                          "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50",
                           selectedTestCaseId === tc.id
                             ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
                             : "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border border-emerald-900/30",
@@ -1747,7 +1718,7 @@ export function ChallengeWorkspace({
                 onClick={() => {
                   if (isInteractionLocked) {
                     setAgentMessage(
-                      "Challenge sudah completed. Klik Reattempt untuk aktifkan chat.",
+                      "Challenge sudah completed. Chat dinonaktifkan.",
                     );
                     return;
                   }
