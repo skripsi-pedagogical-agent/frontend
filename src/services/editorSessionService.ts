@@ -97,6 +97,8 @@ export async function getLatestEditorSession(
     },
   );
 
+  console.log("Fetch editor session response:", response);
+
   if (!response.ok) {
     throw new Error(`Get editor session failed: ${response.status}`);
   }
