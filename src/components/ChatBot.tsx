@@ -5,10 +5,43 @@ import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown, { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 const MarkdownComponents: Components = {
+  table({ children, ...props }) {
+    return (
+      <div className="overflow-x-auto my-2">
+        <table
+          className="min-w-full border-collapse border border-emerald-300/50 text-xs"
+          {...props}
+        >
+          {children}
+        </table>
+      </div>
+    );
+  },
+  th({ children, ...props }) {
+    return (
+      <th
+        className="border border-emerald-300/50 px-3 py-2 bg-emerald-100 text-emerald-950 font-bold text-left"
+        {...props}
+      >
+        {children}
+      </th>
+    );
+  },
+  td({ children, ...props }) {
+    return (
+      <td
+        className="border border-emerald-300/50 px-3 py-2 bg-white text-emerald-900"
+        {...props}
+      >
+        {children}
+      </td>
+    );
+  },
   code({ node, inline, className, children, ...props }: any) {
     const match = /language-(\w+)/.exec(className || "");
     return !inline && match ? (
@@ -240,7 +273,10 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                         : "bg-white text-emerald-950 border border-emerald-300/50 rounded-tl-none",
                     )}
                   >
-                    <ReactMarkdown components={MarkdownComponents}>
+                    <ReactMarkdown
+                      components={MarkdownComponents}
+                      remarkPlugins={[remarkGfm]}
+                    >
                       {msg.content}
                     </ReactMarkdown>
                   </div>
