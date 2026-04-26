@@ -8,7 +8,7 @@ interface TelemetryLogPayload {
   action_type: string;
   hint_type: string;
   code_snapshot: string;
-  metadata: string;
+  metadata: Record<string, unknown>;
 }
 
 export async function logTelemetry(

@@ -525,7 +525,7 @@ export function ChallengeWorkspace({
                 action_type: "STUCK_ERROR_DETECTED",
                 hint_type: "",
                 code_snapshot: code,
-                metadata: JSON.stringify({ error_count: errorCount }),
+                metadata: { error_count: errorCount },
               });
             }
 
@@ -586,7 +586,7 @@ export function ChallengeWorkspace({
         action_type: "STUCK_IDLE_DETECTED",
         hint_type: "",
         code_snapshot: codeRef.current,
-        metadata: JSON.stringify({ idle_seconds: submitIdleTime }),
+        metadata: { idle_seconds: submitIdleTime },
       });
     }
 
@@ -619,12 +619,12 @@ export function ChallengeWorkspace({
               action_type: "IDLE_REASON_SELECTED",
               hint_type: "",
               code_snapshot: codeRef.current,
-              metadata: JSON.stringify({
+              metadata: {
                 reason_id: reason.id,
                 reason_code: reason.code,
                 reason_description: reason.description,
                 choice_type: "no",
-              }),
+              },
             });
           }
         }
@@ -671,12 +671,12 @@ export function ChallengeWorkspace({
             action_type: "IDLE_REASON_SELECTED",
             hint_type: "",
             code_snapshot: codeRef.current,
-            metadata: JSON.stringify({
+            metadata: {
               reason_id: reason.id,
               reason_code: reason.code,
               reason_description: reason.description,
               choice_type: "yes",
-            }),
+            },
           });
         }
 
@@ -1148,9 +1148,9 @@ export function ChallengeWorkspace({
         action_type: "REACTIVE_CHAT_SENT",
         hint_type: "",
         code_snapshot: code,
-        metadata: JSON.stringify({
+        metadata: {
           user_message: content,
-        }),
+        },
       });
     }
 
@@ -1184,10 +1184,10 @@ export function ChallengeWorkspace({
               hint_type:
                 response.ai_message.hint_type || response.hint_type || "",
               code_snapshot: code,
-              metadata: JSON.stringify({
+              metadata: {
                 user_message: content,
                 ai_response: response.ai_message.message,
-              }),
+              },
             });
           }
 
