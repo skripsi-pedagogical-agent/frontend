@@ -5,7 +5,6 @@ const BACKEND_BASE_URL =
 
 interface TelemetryLogPayload {
   problem: string;
-  session_id: string;
   action_type: string;
   hint_type: string;
   code_snapshot: string;

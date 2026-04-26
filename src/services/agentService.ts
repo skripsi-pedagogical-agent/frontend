@@ -10,6 +10,7 @@ export interface AgentChatMessage {
   sender: "USER" | "AI";
   message: string;
   created_at: string;
+  hint_type?: string;
 }
 
 export interface IdleReason {
@@ -53,6 +54,7 @@ interface SendChatRequest {
 interface SendChatResponse {
   user_message: AgentChatMessage;
   ai_message: AgentChatMessage;
+  hint_type?: string;
 }
 
 function buildApiUrl(path: string): string {

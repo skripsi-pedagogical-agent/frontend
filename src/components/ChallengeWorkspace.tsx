@@ -522,7 +522,6 @@ export function ChallengeWorkspace({
             if (latestSessionIdRef.current) {
               void logTelemetry({
                 problem: problem.id,
-                session_id: latestSessionIdRef.current,
                 action_type: "STUCK_ERROR_DETECTED",
                 hint_type: "",
                 code_snapshot: code,
@@ -584,7 +583,6 @@ export function ChallengeWorkspace({
     if (latestSessionIdRef.current) {
       void logTelemetry({
         problem: problem.id,
-        session_id: latestSessionIdRef.current,
         action_type: "STUCK_IDLE_DETECTED",
         hint_type: "",
         code_snapshot: codeRef.current,
@@ -618,7 +616,6 @@ export function ChallengeWorkspace({
           if (latestSessionIdRef.current) {
             void logTelemetry({
               problem: problem.id,
-              session_id: latestSessionIdRef.current,
               action_type: "IDLE_REASON_SELECTED",
               hint_type: "",
               code_snapshot: codeRef.current,
@@ -671,7 +668,6 @@ export function ChallengeWorkspace({
         if (latestSessionIdRef.current) {
           void logTelemetry({
             problem: problem.id,
-            session_id: latestSessionIdRef.current,
             action_type: "IDLE_REASON_SELECTED",
             hint_type: "",
             code_snapshot: codeRef.current,
@@ -1103,12 +1099,12 @@ export function ChallengeWorkspace({
         setErrorCount((prev) => prev + 1);
       }
 
-      void saveEditorSession(code, {
-        statusIdOverride: isAccepted ? 2 : 1,
-        force: true,
-      });
-
       if (isAccepted) {
+        void saveEditorSession(code, {
+          statusIdOverride: isAccepted ? 2 : 1,
+          force: true,
+        });
+
         setIsInteractionLocked(true);
         latestStatusIdRef.current = 2;
       }
@@ -1146,6 +1142,18 @@ export function ChallengeWorkspace({
       timestamp: new Date(),
     };
 
+    if (latestSessionIdRef.current) {
+      void logTelemetry({
+        problem: problem.id,
+        action_type: "REACTIVE_CHAT_SENT",
+        hint_type: "",
+        code_snapshot: code,
+        metadata: JSON.stringify({
+          user_message: content,
+        }),
+      });
+    }
+
     setChatMessages((prev) => [...prev, optimisticUserMessage]);
     setIsTyping(true);
     setAgentState("thinking");
@@ -1168,6 +1176,20 @@ export function ChallengeWorkspace({
             type: "observational",
             timestamp: new Date(response.ai_message.created_at),
           };
+
+          if (latestSessionIdRef.current) {
+            void logTelemetry({
+              problem: problem.id,
+              action_type: "REACTIVE_CHAT_REPLY",
+              hint_type:
+                response.ai_message.hint_type || response.hint_type || "",
+              code_snapshot: code,
+              metadata: JSON.stringify({
+                user_message: content,
+                ai_response: response.ai_message.message,
+              }),
+            });
+          }
 
           setChatMessages((prev) => [...prev, assistantMessage]);
           setAgentState("talking");
@@ -1401,7 +1423,7 @@ export function ChallengeWorkspace({
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
                 type="button"
               >
-                Jalankan Kode
+                Submit Kode
               </button>
             </div>
           </div>
