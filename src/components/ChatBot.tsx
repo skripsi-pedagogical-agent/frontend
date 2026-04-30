@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, User, Sparkles, X, Minimize2, Maximize2 } from "lucide-react";
+import { Send, User, Sparkles, X, Minimize2, Maximize2, Expand, Shrink } from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -80,15 +80,27 @@ export interface Message {
   timestamp: Date;
 }
 
+export interface IdleHelpOption {
+  id: string;
+  description: string;
+}
+
 interface ChatBotProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
+  username: string;
   isTyping?: boolean;
   disabled?: boolean;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   isMinimized: boolean;
   setIsMinimized: (minimized: boolean) => void;
+  idleHelpCheckIn: boolean;
+  idleHelpNoReasons: IdleHelpOption[];
+  idleHelpYesReason?: IdleHelpOption;
+  onIdleHelpChoiceNo: (reason: IdleHelpOption) => void;
+  onIdleHelpChoiceYes: (reason: IdleHelpOption) => void;
+  isIdleHelpSubmitting: boolean;
   agentState:
     | "idle"
     | "thinking"
@@ -99,28 +111,41 @@ interface ChatBotProps {
     | "sad"
     | "mad";
   embedded?: boolean;
+  isExpanded?: boolean;
+  setIsExpanded?: (expanded: boolean) => void;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
   messages,
   onSendMessage,
+  username,
   isTyping,
   disabled = false,
   isOpen,
   setIsOpen,
   isMinimized,
   setIsMinimized,
+  idleHelpCheckIn,
+  idleHelpNoReasons,
+  idleHelpYesReason,
+  onIdleHelpChoiceNo,
+  onIdleHelpChoiceYes,
+  isIdleHelpSubmitting,
   agentState,
   embedded = false,
+  isExpanded = false,
+  setIsExpanded = () => {},
 }) => {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // --- GANTI BAGIAN INI ---
+  useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, isOpen, isMinimized, isExpanded]);
+  // -------------------------
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,8 +164,10 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   const containerClasses = embedded
     ? "flex flex-col h-full w-full bg-[#f8faf9] relative overflow-hidden"
     : cn(
-        "fixed bottom-12 right-6 w-[360px] bg-[#f8faf9] rounded-3xl shadow-2xl border border-emerald-500/20 flex flex-col overflow-hidden z-50 transition-all duration-300",
+        "fixed bottom-12 right-6 bg-[#f8faf9] rounded-3xl shadow-2xl border border-emerald-500/20 flex flex-col overflow-hidden z-50 transition-all duration-300",
         isMinimized && "w-[240px]",
+        !isMinimized && !isExpanded && "w-[360px]",
+        !isMinimized && isExpanded && "w-[700px]",
       );
 
   return (
@@ -153,7 +180,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
               opacity: 1,
               y: 0,
               scale: 1,
-              height: isMinimized ? "80px" : "500px",
+              height: isMinimized ? "80px" : isExpanded ? "650px" : "500px",
             }
       }
       exit={embedded ? undefined : { opacity: 0, y: 20, scale: 0.95 }}
@@ -167,13 +194,13 @@ export const ChatBot: React.FC<ChatBotProps> = ({
         )}
       >
         <div className="flex items-center gap-3">
-          {!embedded && (
+          {/* {!embedded && (
             <div className="w-12 h-12 bg-white/90 rounded-2xl flex items-center justify-center overflow-hidden shadow-inner">
               <div className="scale-[0.45] origin-center">
                 <PandaMascot state={agentState} />
               </div>
             </div>
-          )}
+          )} */}
           <div>
             <h3
               className={cn(
@@ -181,12 +208,24 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 embedded ? "text-sm" : "text-base",
               )}
             >
-              Bamboost
+              Tanya Bamboost!
             </h3>
           </div>
         </div>
         {!embedded && (
           <div className="flex items-center gap-1">
+            {!isMinimized && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+              >
+                {isExpanded ? (
+                  <Shrink className="w-4 h-4" />
+                ) : (
+                  <Expand className="w-4 h-4" />
+                )}
+              </button>
+            )}
             <button
               onClick={() => setIsMinimized(!isMinimized)}
               className="p-2 hover:bg-white/10 rounded-xl transition-colors"
@@ -230,6 +269,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 </div>
               </div>
             )}
+
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -260,11 +300,16 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     msg.role === "user" ? "items-end" : "items-start",
                   )}
                 >
-                  {msg.type && (
+                  <div className="flex items-center gap-2">
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-800 px-1">
-                      {msg.type}
+                      {msg.role === "user" ? username : "BAMBOOST AI"}
                     </span>
-                  )}
+                    {msg.type && msg.type !== "observational" && (
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-800 px-1">
+                        {msg.type}
+                      </span>
+                    )}
+                  </div>
                   <div
                     className={cn(
                       "p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm font-bold overflow-hidden space-y-2",
@@ -289,6 +334,44 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 </div>
               </div>
             ))}
+
+            {idleHelpCheckIn && (
+              <div className="space-y-4">
+                <div className="bg-white border border-emerald-300/60 rounded-3xl shadow-sm p-4 text-left">
+                  <div className="text-[10px] uppercase tracking-[0.25em] font-black text-emerald-700 mb-2">
+                    BAMBOOST AI
+                  </div>
+                  <p className="text-sm font-black text-emerald-950 mb-4">
+                    Sudah cukup lama tanpa submit. Butuh bantuan?
+                  </p>
+                  <div className="grid gap-2">
+                    {idleHelpNoReasons.map((reason) => (
+                      <button
+                        key={reason.id}
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={() => onIdleHelpChoiceNo(reason)}
+                        className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        {reason.description}
+                      </button>
+                    ))}
+                    {idleHelpYesReason && (
+                      <button
+                        type="button"
+                        disabled={isIdleHelpSubmitting}
+                        onClick={() => onIdleHelpChoiceYes(idleHelpYesReason)}
+                        className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                      >
+                        {isIdleHelpSubmitting
+                          ? "Memuat…"
+                          : idleHelpYesReason.description}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             {isTyping && (
               <div className="flex gap-3">
                 <div className="w-8 h-8 bg-emerald-800 rounded-xl flex items-center justify-center text-white shadow-sm overflow-hidden">
