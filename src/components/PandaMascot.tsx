@@ -30,13 +30,13 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             state === "happy"
               ? { rotate: [0, -26, 0], y: [0, -12, 0], x: [0, -6, 0] }
               : state === "thinking"
-                ? { x: 12, y: -12, rotate: -18 }
+                ? { x: 8, y: -8, rotate: -15 } // Lebih rileks
                 : state === "stuck" || state === "confused"
                   ? {
-                      y: [-40, -44, -40],
-                      x: [20, 24, 20],
-                      rotate: [-50, -58, -50],
-                    } // Scratching head
+                      y: [-25, -35, -25],
+                      x: [15, 20, 15],
+                      rotate: [-35, -45, -35],
+                    } // Garuk kepala lebih tinggi dan fokus
                   : state === "mad"
                     ? { x: [6, 10, 6], y: [0, -2, 0], rotate: [20, 32, 20] }
                     : state === "talking"
@@ -51,7 +51,7 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             state === "mad"
               ? {
                   duration:
-                    state === "happy" ? 0.55 : state === "talking" ? 0.45 : 0.5,
+                    state === "happy" ? 0.55 : state === "talking" ? 0.45 : 0.6,
                   repeat: Infinity,
                   ease: "easeInOut",
                 }
@@ -67,13 +67,13 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             state === "happy"
               ? { rotate: [0, 26, 0], y: [0, -12, 0], x: [0, 6, 0] }
               : state === "thinking"
-                ? { x: -22, y: -36, rotate: 40 } // Hand to chin
+                ? { x: -14, y: -22, rotate: 25 } // Hand to chin diturunkan agar tidak menutupi mata
                 : state === "stuck" || state === "confused"
                   ? {
-                      y: [-40, -44, -40],
-                      x: [-20, -24, -20],
-                      rotate: [50, 58, 50],
-                    } // Scratching head
+                      y: [-20, -30, -20],
+                      x: [-12, -18, -12],
+                      rotate: [30, 40, 30],
+                    } // Garuk kepala kanan lebih tinggi
                   : state === "mad"
                     ? {
                         x: [-6, -10, -6],
@@ -92,7 +92,7 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             state === "mad"
               ? {
                   duration:
-                    state === "happy" ? 0.55 : state === "talking" ? 0.45 : 0.5,
+                    state === "happy" ? 0.55 : state === "talking" ? 0.45 : 0.6,
                   repeat: Infinity,
                   ease: "easeInOut",
                 }

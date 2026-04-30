@@ -72,7 +72,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight text-emerald-900 leading-none">
-              Bamboost
+              Bamboost!
             </h1>
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-1">
               Menu Utama
@@ -208,7 +208,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </main>
 
       <footer className="p-8 text-center text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">
-        Chew Code • Grow Strong • Bamboost v1.0
+        Chew Code • Grow Strong • Bamboost v2.0
       </footer>
     </div>
   );

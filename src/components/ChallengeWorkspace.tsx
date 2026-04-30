@@ -138,6 +138,7 @@ export function ChallengeWorkspace({
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [hasClickedMascot, setHasClickedMascot] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
@@ -163,6 +164,7 @@ export function ChallengeWorkspace({
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastIdleTriggerTimeRef = useRef(0);
   const lastErrorTriggerCountRef = useRef(0);
+  const hasGreetedRef = useRef(false);
 
   const isBackendProblem =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -241,6 +243,7 @@ export function ChallengeWorkspace({
     setIsInteractionLocked(false);
     lastIdleTriggerTimeRef.current = 0;
     lastErrorTriggerCountRef.current = 0;
+    hasGreetedRef.current = false; // Reset greeting status untuk problem baru
     lastCodeLength.current = problem.starterCode.length;
     hasUserTypedRef.current = false;
     lastSavedSignatureRef.current = null;
@@ -447,7 +450,10 @@ export function ChallengeWorkspace({
       return;
     }
 
-    if (chatMessages.length === 0 && !agentMessage) {
+    // Gunakan ref untuk memastikan greeting hanya tereksekusi 1x
+    if (chatMessages.length === 0 && !hasGreetedRef.current) {
+      hasGreetedRef.current = true; // Tandai bahwa user sudah disapa
+
       const welcomes = [
         `Hei ${username}! Siap mengalahkan masalah ini? Saya panda-tutor Anda, Bamboost!`,
         `Selamat datang di editor, ${username}! Mari kita tulis kode yang bersih bersama-sama.`,
@@ -459,13 +465,13 @@ export function ChallengeWorkspace({
       const timer = setTimeout(() => {
         setAgentMessage(null);
         setAgentState("idle");
-      }, 8000);
+      }, 20000); // Tepat 20 detik lalu kembali idle
 
       return () => clearTimeout(timer);
     }
 
     return undefined;
-  }, [chatMessages.length, agentMessage, isHistoryLoaded, username]);
+  }, [chatMessages.length, isHistoryLoaded, username]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -475,9 +481,10 @@ export function ChallengeWorkspace({
     return () => clearInterval(interval);
   }, []);
 
+  // 1. Effect untuk memunculkan pesan saat idle mencapai 60 detik
   useEffect(() => {
     if (
-      submitIdleTime === 30 &&
+      submitIdleTime === 60 &&
       !agentMessage &&
       (!isChatOpen || isMinimized)
     ) {
@@ -487,6 +494,21 @@ export function ChallengeWorkspace({
       );
     }
   }, [agentMessage, submitIdleTime, isChatOpen, isMinimized]);
+
+  // 2. Effect terpisah khusus untuk menghilangkan pesan setelah 15 detik
+  useEffect(() => {
+    if (
+      agentMessage ===
+      "Butuh bantuan dengan logika? Saya bisa beri petunjuk di chat."
+    ) {
+      const timer = setTimeout(() => {
+        setAgentMessage(null);
+        setAgentState("idle");
+      }, 15000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [agentMessage]);
 
   // Effect untuk error burst intervention
   useEffect(() => {
@@ -1282,13 +1304,13 @@ export function ChallengeWorkspace({
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="w-10 h-10 bg-emerald-900 rounded-xl flex items-center justify-center shadow-emerald-950/20 shadow-lg">
+          {/* <div className="w-10 h-10 bg-emerald-900 rounded-xl flex items-center justify-center shadow-emerald-950/20 shadow-lg">
             <span className="text-white font-bold text-xl">
               {username.charAt(0).toUpperCase()}
             </span>
-          </div>
+          </div> */}
           <h1 className="text-xl font-black tracking-tight text-emerald-950">
-            Bamboost
+            Bamboost!
           </h1>
           <div className="ml-4 px-3 py-1 bg-emerald-300/60 rounded-full border border-emerald-400/50">
             <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
@@ -1824,13 +1846,22 @@ export function ChallengeWorkspace({
       <ChatBot
         messages={chatMessages}
         onSendMessage={handleSendMessage}
+        username={username}
         isTyping={isTyping}
         disabled={isInteractionLocked}
         isOpen={isChatOpen}
         setIsOpen={setIsChatOpen}
         isMinimized={isMinimized}
         setIsMinimized={setIsMinimized}
+        isExpanded={isExpanded}
+        setIsExpanded={setIsExpanded}
         agentState={agentState}
+        idleHelpCheckIn={idleHelpCheckIn}
+        idleHelpNoReasons={idleHelpNoReasons}
+        idleHelpYesReason={idleHelpYesReason}
+        onIdleHelpChoiceNo={handleIdleHelpChoiceNo}
+        onIdleHelpChoiceYes={handleIdleHelpChoiceYes}
+        isIdleHelpSubmitting={isIdleHelpSubmitting}
       />
 
       <footer className="h-8 bg-emerald-950 text-emerald-100 px-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
