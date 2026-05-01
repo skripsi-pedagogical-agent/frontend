@@ -1176,6 +1176,13 @@ export function ChallengeWorkspace({
       });
     }
 
+    // Reset idle timer whenever user actively chats with the chatbot.
+    setSubmitIdleTime(0);
+    lastIdleTriggerTimeRef.current = 0;
+    if (idleHelpCheckIn) {
+      setIdleHelpCheckIn(false);
+    }
+
     setChatMessages((prev) => [...prev, optimisticUserMessage]);
     setIsTyping(true);
     setAgentState("thinking");
