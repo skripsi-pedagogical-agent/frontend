@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Send, User, Sparkles, X, Minimize2, Maximize2, Expand, Shrink } from "lucide-react";
+import { Send, User, Sparkles, X, Minimize2, Maximize2, Expand, Shrink, Zap } from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -14,7 +13,7 @@ const MarkdownComponents: Components = {
     return (
       <div className="overflow-x-auto my-2">
         <table
-          className="min-w-full border-collapse border border-emerald-300/50 text-xs"
+          className="min-w-full border-collapse border border-emerald-200 text-sm"
           {...props}
         >
           {children}
@@ -25,7 +24,7 @@ const MarkdownComponents: Components = {
   th({ children, ...props }) {
     return (
       <th
-        className="border border-emerald-300/50 px-3 py-2 bg-emerald-100 text-emerald-950 font-bold text-left"
+        className="border border-emerald-200 px-3 py-2 bg-emerald-50 text-emerald-950 font-semibold text-left"
         {...props}
       >
         {children}
@@ -35,7 +34,7 @@ const MarkdownComponents: Components = {
   td({ children, ...props }) {
     return (
       <td
-        className="border border-emerald-300/50 px-3 py-2 bg-white text-emerald-900"
+        className="border border-emerald-200 px-3 py-2 bg-white text-emerald-900"
         {...props}
       >
         {children}
@@ -50,7 +49,15 @@ const MarkdownComponents: Components = {
         style={vscDarkPlus as any}
         language={match[1]}
         PreTag="div"
-        className="rounded-lg !my-2 text-xs"
+        wrapLongLines={true}
+        customStyle={{
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          borderRadius: "0.75rem",
+          margin: "0.5rem 0",
+          fontSize: "0.85rem"
+        }}
+        className="rounded-xl shadow-sm"
       >
         {String(children).replace(/\n$/, "")}
       </SyntaxHighlighter>
@@ -59,7 +66,7 @@ const MarkdownComponents: Components = {
         {...props}
         className={cn(
           className,
-          "bg-black/10 px-1 py-0.5 rounded font-mono text-xs",
+          "bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-mono text-xs whitespace-pre-wrap break-words",
         )}
       >
         {children}
@@ -138,14 +145,21 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 }) => {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // --- GANTI BAGIAN INI ---
+  // FIX: Dynamic textarea height
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [input, isOpen, isMinimized]);
+
   useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isTyping, isOpen, isMinimized, isExpanded]);
-  // -------------------------
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,60 +170,61 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     if (input.trim() && !isTyping) {
       onSendMessage(input.trim());
       setInput("");
+      // Reset height after submit
+      if (textareaRef.current) {
+         textareaRef.current.style.height = "auto";
+      }
     }
   };
+
+  const lastMessagePreview = messages.length
+    ? messages[messages.length - 1].content.replace(/\s+/g, " ").trim()
+    : "";
+  
+  // FIX: Trimming the message for minimized state
+  const previewLabel = lastMessagePreview.length > 50
+    ? `${lastMessagePreview.slice(0, 50)}...`
+    : lastMessagePreview;
 
   if (!isOpen && !embedded) return null;
 
   const containerClasses = embedded
-    ? "flex flex-col h-full w-full bg-[#f8faf9] relative overflow-hidden"
+    ? "flex flex-col h-full w-full bg-[#f4f7f6] relative overflow-hidden"
     : cn(
-        "fixed bottom-12 right-6 bg-[#f8faf9] rounded-3xl shadow-2xl border border-emerald-500/20 flex flex-col overflow-hidden z-50 transition-all duration-300",
-        isMinimized && "w-[240px]",
-        !isMinimized && !isExpanded && "w-[360px]",
-        !isMinimized && isExpanded && "w-[700px]",
+        "fixed bottom-12 right-4 left-auto max-w-[calc(100%-2rem)] bg-[#f4f7f6] rounded-3xl shadow-2xl border border-emerald-500/20 flex flex-col overflow-hidden z-50",
+        isMinimized && "w-[260px] h-[88px]",
+        !isMinimized && !isExpanded && "w-[380px] h-[550px]",
+        !isMinimized && isExpanded && "w-[700px] h-[650px]",
       );
 
   return (
-    <motion.div
-      initial={embedded ? undefined : { opacity: 0, y: 20, scale: 0.95 }}
-      animate={
-        embedded
-          ? { height: "100%" }
-          : {
-              opacity: 1,
-              y: 0,
-              scale: 1,
-              height: isMinimized ? "80px" : isExpanded ? "650px" : "500px",
-            }
-      }
-      exit={embedded ? undefined : { opacity: 0, y: 20, scale: 0.95 }}
-      className={containerClasses}
-    >
+    <div className={containerClasses}>
       {/* Header */}
       <div
         className={cn(
-          "bg-emerald-800 px-4 flex items-center justify-between text-white shrink-0",
-          embedded ? "h-14" : "h-20",
+          "bg-emerald-800 px-4 flex items-center justify-between text-white shrink-0 shadow-sm z-10",
+          embedded ? "h-14" : "h-16",
         )}
       >
         <div className="flex items-center gap-3">
-          {/* {!embedded && (
-            <div className="w-12 h-12 bg-white/90 rounded-2xl flex items-center justify-center overflow-hidden shadow-inner">
-              <div className="scale-[0.45] origin-center">
-                <PandaMascot state={agentState} />
-              </div>
-            </div>
-          )} */}
-          <div>
+          <div className="min-w-0">
             <h3
               className={cn(
-                "font-black tracking-tight",
+                "font-bold tracking-tight truncate flex items-center gap-2",
                 embedded ? "text-sm" : "text-base",
               )}
             >
+              <Sparkles className="w-4 h-4 text-emerald-300" />
               Tanya Bamboost!
             </h3>
+            {isMinimized && previewLabel && (
+              <p
+                className="mt-0.5 text-xs text-emerald-200/80 truncate w-[200px]"
+                title={previewLabel}
+              >
+                {previewLabel}
+              </p>
+            )}
           </div>
         </div>
         {!embedded && (
@@ -217,7 +232,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({
             {!isMinimized && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                title={isExpanded ? "Perkecil" : "Perbesar"}
               >
                 {isExpanded ? (
                   <Shrink className="w-4 h-4" />
@@ -226,19 +242,19 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 )}
               </button>
             )}
-            <button
+            {/* <button
               onClick={() => setIsMinimized(!isMinimized)}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
             >
               {isMinimized ? (
                 <Maximize2 className="w-4 h-4" />
               ) : (
                 <Minimize2 className="w-4 h-4" />
               )}
-            </button>
+            </button> */}
             <button
               onClick={() => setIsOpen(false)}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+              className="p-1.5 hover:bg-rose-500/80 rounded-lg transition-colors ml-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -248,28 +264,42 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
       {!isMinimized && (
         <>
-          {/* Messages */}
+          {/* Messages Area */}
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#e8edea]"
+            className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f4f7f6]"
           >
+            {/* Empty State / Onboarding */}
             {messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-                <div className="w-16 h-16 bg-emerald-300 rounded-3xl flex items-center justify-center text-emerald-900">
-                  <Sparkles className="w-8 h-8" />
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 opacity-80">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 shadow-inner">
+                   <div className="scale-[0.6] origin-center translate-y-2">
+                     <PandaMascot state="happy" />
+                   </div>
                 </div>
                 <div>
-                  <p className="text-base font-black text-emerald-950">
-                    Kunyah masalah?
-                  </p>
-                  <p className="text-xs text-emerald-900 mt-1 font-black">
-                    Saya di sini untuk membantu Anda merencanakan, debug, atau
-                    mengoptimalkan kode Anda!
-                  </p>
+                  <h4 className="text-lg font-bold text-emerald-900 mb-2">
+                    Aku BamBoost, siap membantu!
+                    </h4>
+                    <ul className="text-sm text-emerald-700 space-y-2 font-medium text-left bg-emerald-50 p-4 rounded-2xl border border-emerald-100 inline-block">
+                    <li className="flex items-start gap-2">
+                      <span className="shrink-0">💡</span> 
+                      <span>"Bamboost, tolong kasih <b>hint</b> untuk logika ini?"</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="shrink-0">🧩</span> 
+                      <span>"Ada saran <b>approach (pendekatan)</b> lain nggak?"</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="shrink-0">📝</span> 
+                      <span>"Bisa kasih <b>contoh snippet</b> yang mirip?"</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             )}
 
+            {/* Chat Bubbles */}
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -278,44 +308,55 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                   msg.role === "user" ? "flex-row-reverse" : "flex-row",
                 )}
               >
+                {/* Avatar */}
                 <div
                   className={cn(
-                    "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-1",
                     msg.role === "user"
-                      ? "bg-emerald-300 text-emerald-900"
-                      : "bg-emerald-800 text-white",
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white border border-emerald-200 text-emerald-800",
                   )}
                 >
                   {msg.role === "user" ? (
                     <User className="w-4 h-4" />
                   ) : (
-                    <div className="scale-[0.25] origin-center">
+                    <div className="scale-[0.25] origin-center translate-y-1">
                       <PandaMascot state={agentState} />
                     </div>
                   )}
                 </div>
+
+                {/* Message Content */}
                 <div
                   className={cn(
-                    "max-w-[80%] space-y-1",
-                    msg.role === "user" ? "items-end" : "items-start",
+                    "max-w-[85%] space-y-1",
+                    msg.role === "user" ? "items-end text-right" : "items-start text-left",
                   )}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-800 px-1">
-                      {msg.role === "user" ? username : "BAMBOOST AI"}
+                  {/* Sender Name & Type Label */}
+                  <div className={cn(
+                    "flex items-center gap-2",
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  )}>
+                    <span className="text-[10px] font-bold tracking-wider text-emerald-800/70 uppercase">
+                      {msg.role === "user" ? username : "BAMBOOST"}
                     </span>
-                    {msg.type && msg.type !== "observational" && (
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-800 px-1">
-                        {msg.type}
-                      </span>
+                    
+                  
+                    {msg.role === "assistant" && msg.type !== "observational" && (
+                       <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
+                         Balasan
+                       </span>
                     )}
                   </div>
+
+                  {/* Bubble */}
                   <div
                     className={cn(
-                      "p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm font-bold overflow-hidden space-y-2",
+                      "p-3.5 text-sm leading-relaxed shadow-sm break-words prose prose-sm max-w-none",
                       msg.role === "user"
-                        ? "bg-emerald-800 text-white rounded-tr-none"
-                        : "bg-white text-emerald-950 border border-emerald-300/50 rounded-tl-none",
+                        ? "bg-emerald-700 text-white rounded-2xl rounded-tr-none prose-invert"
+                        : "bg-white text-slate-800 border border-emerald-100/60 rounded-2xl rounded-tl-none font-medium prose-emerald",
                     )}
                   >
                     <ReactMarkdown
@@ -325,33 +366,32 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                       {msg.content}
                     </ReactMarkdown>
                   </div>
-                  <span className="text-[9px] font-black text-emerald-700 px-1">
+                  <div className="text-[10px] font-medium text-emerald-600/60 px-1">
                     {msg.timestamp.toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </span>
+                  </div>
                 </div>
               </div>
             ))}
 
+            {/* Proactive Idle Help Check-in */}
             {idleHelpCheckIn && (
-              <div className="space-y-4">
-                <div className="bg-white border border-emerald-300/60 rounded-3xl shadow-sm p-4 text-left">
-                  <div className="text-[10px] uppercase tracking-[0.25em] font-black text-emerald-700 mb-2">
-                    BAMBOOST AI
-                  </div>
-                  <p className="text-sm font-black text-emerald-950 mb-4">
-                    Sudah cukup lama tanpa submit. Butuh bantuan?
+              <div className="space-y-4 pt-4 border-t border-emerald-200/50">
+                <div className="bg-white border-2 border-amber-200 rounded-3xl shadow-md p-5 text-left relative overflow-hidden">
+                
+                  <p className="text-sm font-bold text-slate-800 mb-5">
+                    Saya perhatikan kamu terdiam cukup lama. Ada yang bikin bingung?
                   </p>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2.5">
                     {idleHelpNoReasons.map((reason) => (
                       <button
                         key={reason.id}
                         type="button"
                         disabled={isIdleHelpSubmitting}
                         onClick={() => onIdleHelpChoiceNo(reason)}
-                        className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                        className="w-full text-left text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
                       >
                         {reason.description}
                       </button>
@@ -361,76 +401,77 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                         type="button"
                         disabled={isIdleHelpSubmitting}
                         onClick={() => onIdleHelpChoiceYes(idleHelpYesReason)}
-                        className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                        className="w-full text-left text-xs font-bold text-emerald-900 bg-emerald-100 border border-emerald-200 rounded-xl px-4 py-3 hover:bg-emerald-200 transition-colors disabled:opacity-50 mt-2"
                       >
                         {isIdleHelpSubmitting
-                          ? "Memuat…"
-                          : idleHelpYesReason.description}
+                          ? "Memuat hint..."
+                          : "Ya, beri saya hint logika."}
                       </button>
                     )}
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Typing Indicator */}
             {isTyping && (
               <div className="flex gap-3">
-                <div className="w-8 h-8 bg-emerald-800 rounded-xl flex items-center justify-center text-white shadow-sm overflow-hidden">
-                  <div className="scale-[0.25] origin-center">
+                <div className="w-8 h-8 bg-white border border-emerald-200 rounded-full flex items-center justify-center text-white shadow-sm mt-1">
+                  <div className="scale-[0.25] origin-center translate-y-1">
                     <PandaMascot state="thinking" />
                   </div>
                 </div>
-                <div className="bg-white border border-emerald-200 p-3 rounded-2xl rounded-tl-none shadow-sm">
-                  <div className="flex gap-1">
-                    <motion.div
-                      animate={{ opacity: [0.4, 1, 0.4] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                      className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ opacity: [0.4, 1, 0.4] }}
-                      transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
-                      className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
-                    />
-                    <motion.div
-                      animate={{ opacity: [0.4, 1, 0.4] }}
-                      transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
-                      className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
-                    />
+                <div className="bg-white border border-emerald-100 px-4 py-3.5 rounded-2xl rounded-tl-none shadow-sm flex items-center h-[42px]">
+                  <div className="flex gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Input */}
+          {/* FIX: Input Area (Multi-line & proper padding) */}
           <form
             onSubmit={handleSubmit}
-            className="p-4 bg-[#f8faf9] border-t border-emerald-300/50 shrink-0"
+            className="p-3 bg-white border-t border-emerald-100 shrink-0 shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.05)]"
           >
-            <div className="relative">
-              <input
-                type="text"
+            <div className="relative flex items-end gap-2 w-full">
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
                 placeholder={
                   disabled
-                    ? "Tantangan telah selesai. Klik Reattempt untuk mengobrol kembali."
-                    : "Minta petunjuk dari Bamboost..."
+                    ? "Tantangan selesai."
+                    : "Ketik pertanyaanmu..."
                 }
                 disabled={disabled}
-                className="w-full bg-white border border-emerald-400/50 rounded-2xl py-3.5 pl-5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:bg-white transition-all placeholder:text-emerald-600/50 font-black text-emerald-950"
+                className="flex-1 w-full min-h-[44px] overflow-y-auto resize-none bg-emerald-50/50 border border-emerald-200 rounded-xl py-3 pl-4 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all placeholder:text-emerald-700/40 font-medium text-emerald-950 whitespace-pre-wrap break-words"
+                style={{ maxHeight: '120px' }}
               />
               <button
                 type="submit"
                 disabled={disabled || !input.trim() || isTyping}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-emerald-800 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-800 transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
+                className="h-[44px] w-[44px] flex items-center justify-center bg-emerald-700 text-white rounded-xl hover:bg-emerald-600 disabled:bg-emerald-100 disabled:text-emerald-400 shrink-0 shadow-sm"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4 ml-0.5" />
               </button>
+            </div>
+            <div className="text-[10px] text-center text-emerald-600/60 mt-2 font-medium">
+              Bamboost dapat membuat kesalahan. Tekan Shift + Enter untuk garis baru.
             </div>
           </form>
         </>
       )}
-    </motion.div>
+    </div>
   );
 };
