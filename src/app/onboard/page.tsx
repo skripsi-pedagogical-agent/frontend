@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { PandaMascot } from "@/src/components/PandaMascot";
 import {
   isAuthenticated,
@@ -13,9 +14,13 @@ import {
 
 export default function OnboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loginForm, setLoginForm] = useState<LoginRequest>({
     username: "",
@@ -30,16 +35,21 @@ export default function OnboardPage() {
   });
 
   const nextPath = useMemo(() => {
-    if (typeof window === "undefined") return "/home";
-    const params = new URLSearchParams(window.location.search);
-    const next = params.get("next");
+    const next = searchParams?.get("next");
 
     if (!next || !next.startsWith("/")) {
       return "/home";
     }
 
     return next;
-  }, []);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const modeParam = searchParams?.get("mode");
+    if (modeParam === "login" || modeParam === "register") {
+      setMode(modeParam);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -62,23 +72,38 @@ export default function OnboardPage() {
     }
   };
 
+  const passwordsMatch =
+    registerForm.password === registerForm.password_confirm;
+  const passwordValidationActive =
+    registerForm.password.length > 0 || registerForm.password_confirm.length > 0;
+  const passwordMismatch = passwordValidationActive && !passwordsMatch;
+
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (registerForm.password !== registerForm.password_confirm) {
+    if (!passwordsMatch) {
       setError("Password dan konfirmasi password harus sama.");
       return;
     }
 
     setError(null);
+    setSuccessMessage(null);
     setIsSubmitting(true);
     try {
       await register(registerForm);
-      await login({
+      setMode("login");
+      setLoginForm({
         username: registerForm.username,
-        password: registerForm.password,
+        password: "",
       });
-      router.replace(nextPath);
+      setRegisterForm({
+        username: "",
+        name: "",
+        password: "",
+        password_confirm: "",
+      });
+      setSuccessMessage("Registrasi berhasil. Silakan login dengan akun Anda.");
+      router.replace("/onboard?mode=login");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Register gagal.");
     } finally {
@@ -114,6 +139,7 @@ export default function OnboardPage() {
               onClick={() => {
                 setMode("login");
                 setError(null);
+                setSuccessMessage(null);
               }}
               className={`w-1/2 py-2 rounded-xl text-sm font-black transition-colors ${
                 mode === "login"
@@ -128,6 +154,7 @@ export default function OnboardPage() {
               onClick={() => {
                 setMode("register");
                 setError(null);
+                setSuccessMessage(null);
               }}
               className={`w-1/2 py-2 rounded-xl text-sm font-black transition-colors ${
                 mode === "register"
@@ -141,6 +168,11 @@ export default function OnboardPage() {
 
           {mode === "login" ? (
             <form onSubmit={handleLogin} className="w-full space-y-4">
+              {successMessage && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">
+                  {successMessage}
+                </div>
+              )}
               <input
                 autoFocus
                 type="text"
@@ -155,19 +187,29 @@ export default function OnboardPage() {
                 className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
                 required
               />
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) =>
-                  setLoginForm((prev) => ({
-                    ...prev,
-                    password: e.target.value,
-                  }))
-                }
-                placeholder="Password"
-                className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={loginForm.password}
+                  onChange={(e) =>
+                    setLoginForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
+                  placeholder="Password"
+                  className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 pr-12 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -198,39 +240,66 @@ export default function OnboardPage() {
                 onChange={(e) =>
                   setRegisterForm((prev) => ({ ...prev, name: e.target.value }))
                 }
-                placeholder="Nama"
+                placeholder="Nama Panggilan"
                 className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
                 required
               />
-              <input
-                type="password"
-                value={registerForm.password}
-                onChange={(e) =>
-                  setRegisterForm((prev) => ({
-                    ...prev,
-                    password: e.target.value,
-                  }))
-                }
-                placeholder="Password"
-                className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
-                required
-              />
-              <input
-                type="password"
-                value={registerForm.password_confirm}
-                onChange={(e) =>
-                  setRegisterForm((prev) => ({
-                    ...prev,
-                    password_confirm: e.target.value,
-                  }))
-                }
-                placeholder="Konfirmasi password"
-                className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={registerForm.password}
+                  onChange={(e) => {
+                    setError(null);
+                    setRegisterForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }));
+                  }}
+                  placeholder="Password"
+                  className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 pr-12 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={registerForm.password_confirm}
+                  onChange={(e) => {
+                    setError(null);
+                    setRegisterForm((prev) => ({
+                      ...prev,
+                      password_confirm: e.target.value,
+                    }));
+                  }}
+                  placeholder="Konfirmasi password"
+                  className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-3 px-5 pr-12 text-sm font-bold text-emerald-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all placeholder:text-emerald-400"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {passwordMismatch && (
+                <p className="text-left text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  Password dan konfirmasi password harus sama.
+                </p>
+              )}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || passwordMismatch}
                 className="w-full py-3 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
               >
                 {isSubmitting ? "Memproses..." : "Daftar"}

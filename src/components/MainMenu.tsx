@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
@@ -50,20 +50,51 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [currentCatchphrase, setCurrentCatchphrase] = useState(catchphrases[0]);
   const [catchphraseIndex, setCatchphraseIndex] = useState(0);
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<"" | "Easy" | "Medium" | "Hard">("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+
+  const categories = useMemo(
+    () => Array.from(new Set(problems.map((item) => item.category))).sort(),
+    [problems],
+  );
+
+  const filteredProblems = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return problems.filter((problem) => {
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        problem.title.toLowerCase().includes(normalizedSearch) ||
+        problem.description.toLowerCase().includes(normalizedSearch) ||
+        problem.category.toLowerCase().includes(normalizedSearch);
+
+      const matchesDifficulty =
+        selectedDifficulty === "" || problem.difficulty === selectedDifficulty;
+
+      const matchesCategory =
+        selectedCategory === "" || problem.category === selectedCategory;
+
+      return matchesSearch && matchesDifficulty && matchesCategory;
+    });
+  }, [problems, searchTerm, selectedDifficulty, selectedCategory]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCatchphraseIndex((prev) => (prev + 1) % catchphrases.length);
       setCurrentCatchphrase(
         catchphrases[(catchphraseIndex + 1) % catchphrases.length]
       );
-    }, 5000); // Ubah catchphrase setiap 5 detik
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [catchphraseIndex, catchphrases]);
+
   return (
-    <div className="min-h-screen bg-[#f0f4f2] flex flex-col font-sans text-emerald-950 overflow-y-auto">
-      {/* Header */}
-      <header className="h-20 bg-white border-b border-emerald-200 px-8 flex items-center justify-between shadow-sm sticky top-0 z-20">
+    <div className="min-h-screen bg-[#f0f4f2] flex flex-col font-sans text-emerald-950">
+      
+      {/* Header - Sticky */}
+      <header className="h-20 bg-white border-b border-emerald-200 px-8 flex items-center justify-between shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-emerald-700 rounded-2xl flex items-center justify-center shadow-emerald-200 shadow-lg">
             <span className="text-white font-black text-2xl">
@@ -107,10 +138,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
           <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
             <div className="flex-1 space-y-6 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 rounded-full text-xs font-black uppercase tracking-widest backdrop-blur-sm">
-                <Sparkles className="w-4 h-4" />
-                Tantangan Harian Tersedia
-              </div>
               <AnimatePresence mode="wait">
                 <motion.h2
                   key={currentCatchphrase}
@@ -123,8 +150,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   {currentCatchphrase}
                 </motion.h2>
               </AnimatePresence>
-              <p className="text-white text-lg font-bold max-w-xl">
-                Saya telah menyiapkan beberapa tantangan untuk Anda hari ini. Mari berlatih keterampilan Python Anda bersama-sama!
+              <p className="text-slate-100/95 text-lg font-medium max-w-xl">
+                Temukan tantangan coding yang dirancang untuk memperkuat logika, kebiasaan, dan kemampuan problem solving Anda.
               </p>
             </div>
             <div className="w-48 h-48 bg-white rounded-[3rem] flex items-center justify-center shadow-2xl shrink-0 overflow-hidden">
@@ -135,21 +162,77 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
         </section>
 
-        {/* Challenges Grid */}
-        <section className="space-y-8">
+        {/* Challenges Grid Section */}
+        <section className="space-y-6">
+          
+          {/* Header & Item Count */}
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-black tracking-tight text-emerald-900 flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <Code2 className="w-8 h-8 text-emerald-700" />
-              Tantangan Tersedia
-            </h3>
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-600">
-              <Terminal className="w-4 h-4" />
-              Python 3.10
+              <div>
+                <h3 className="text-2xl font-black tracking-tight text-emerald-900">
+                  Tantangan Tersedia
+                </h3>
+                <p className="text-sm text-emerald-600 font-medium mt-1">
+                  {filteredProblems.length} tantangan ditemukan
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {problems.map((problem, index) => (
+          {/* Search & Filters Bar */}
+          <div className="flex flex-col md:flex-row gap-4 w-full">
+            {/* Search Input */}
+            <div className="flex-1">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari judul, kategori, atau deskripsi..."
+                className="w-full rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
+              />
+            </div>
+
+            {/* Dropdowns Group */}
+            <div className="flex flex-col sm:flex-row gap-4 shrink-0">
+              <select
+                value={selectedDifficulty}
+                onChange={(e) => setSelectedDifficulty(e.target.value as "" | "Easy" | "Medium" | "Hard")}
+                className="w-full sm:w-48 rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
+              >
+                <option value="">Semua Difficulty</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full sm:w-48 rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
+              >
+                <option value="">Semua Kategori</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Empty State Message */}
+          {filteredProblems.length === 0 && (
+            <div className="py-12 text-center bg-white rounded-[2rem] border border-emerald-100">
+              <p className="text-emerald-600 font-medium">
+                Tidak ada tantangan yang cocok dengan filter ini.
+              </p>
+            </div>
+          )}
+
+          {/* Grid List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+            {filteredProblems.map((problem, index) => (
               <motion.button
                 key={problem.id}
                 initial={{ opacity: 0, y: 20 }}
