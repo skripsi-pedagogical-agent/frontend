@@ -25,10 +25,10 @@ import type { Problem } from "@/src/lib/problems";
 import { getStoredAuthUser } from "@/src/services/authService";
 import {
   getAgentChatHistory,
-  getIdleReasons,
-  type IdleReason,
+  getStuckReasons,
+  type StuckReason,
   sendAgentChatMessage,
-  submitProblemIdleReason,
+  submitProblemStuckReason,
   triggerAgentSystemIntervention,
 } from "@/src/services/agentService";
 import {
@@ -56,28 +56,32 @@ type AgentState =
 
 const SUBMIT_IDLE_PROMPT_SECONDS = 120;
 
-const FALLBACK_IDLE_REASONS: IdleReason[] = [
+const FALLBACK_IDLE_REASONS: StuckReason[] = [
   {
     id: "still-understanding",
     code: "still-understanding",
+    stuck_type: "idle",
     description: "Tidak, saya lagi memahami soal",
     created_at: "",
   },
   {
     id: "still-thinking",
     code: "still-thinking",
+    stuck_type: "idle",
     description: "Tidak, saya lagi memikirkan logika",
     created_at: "",
   },
   {
     id: "still-doing",
     code: "still-doing",
+    stuck_type: "idle",
     description: "Tidak, saya sedang mengerjakan soal",
     created_at: "",
   },
   {
-    id: "stuck",
-    code: "stuck",
+    id: "stuck-idle",
+    code: "stuck-idle",
+    stuck_type: "idle",
     description: "Ya, saya butuh bantuan",
     created_at: "",
   },
@@ -147,7 +151,7 @@ export function ChallengeWorkspace({
   const [submitIdleTime, setSubmitIdleTime] = useState(0);
   const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
   const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
-  const [idleReasons, setIdleReasons] = useState<IdleReason[]>(
+  const [idleReasons, setIdleReasons] = useState<StuckReason[]>(
     FALLBACK_IDLE_REASONS,
   );
   const [errorCount, setErrorCount] = useState(0);
@@ -312,7 +316,7 @@ export function ChallengeWorkspace({
       }
 
       try {
-        const reasons = await getIdleReasons();
+        const reasons = await getStuckReasons("idle");
 
         if (isCancelled || reasons.length === 0) {
           return;
@@ -320,7 +324,7 @@ export function ChallengeWorkspace({
 
         setIdleReasons(reasons);
       } catch (error) {
-        console.error("Failed to load idle reasons:", error);
+        console.error("Failed to load stuck reasons:", error);
       }
     };
 
@@ -627,12 +631,12 @@ export function ChallengeWorkspace({
   ]);
 
   const handleIdleHelpChoiceNo = useCallback(
-    async (reason: IdleReason) => {
+    async (reason: StuckReason) => {
       setIsIdleHelpSubmitting(true);
 
       try {
         if (isBackendProblem) {
-          await submitProblemIdleReason({
+          await submitProblemStuckReason({
             reason_id: reason.id,
             problem_id: problem.id,
           });
@@ -646,6 +650,7 @@ export function ChallengeWorkspace({
               metadata: {
                 reason_id: reason.id,
                 reason_code: reason.code,
+                stuck_type: reason.stuck_type,
                 reason_description: reason.description,
                 choice_type: "no",
               },
@@ -653,7 +658,7 @@ export function ChallengeWorkspace({
           }
         }
       } catch (error) {
-        console.error("Failed to submit idle reason:", error);
+        console.error("Failed to submit stuck reason:", error);
       } finally {
         setIdleHelpCheckIn(false);
         setSubmitIdleTime(0);
@@ -666,7 +671,7 @@ export function ChallengeWorkspace({
   );
 
   const handleIdleHelpChoiceYes = useCallback(
-    async (reason: IdleReason) => {
+    async (reason: StuckReason) => {
       if (!isBackendProblem || isInteractionLocked) {
         setIdleHelpCheckIn(false);
         setSubmitIdleTime(0);
@@ -684,7 +689,7 @@ export function ChallengeWorkspace({
           throw new Error("Missing auth user");
         }
 
-        await submitProblemIdleReason({
+        await submitProblemStuckReason({
           reason_id: reason.id,
           problem_id: problem.id,
         });
@@ -698,6 +703,7 @@ export function ChallengeWorkspace({
             metadata: {
               reason_id: reason.id,
               reason_code: reason.code,
+              stuck_type: reason.stuck_type,
               reason_description: reason.description,
               choice_type: "yes",
             },
@@ -1300,11 +1306,11 @@ export function ChallengeWorkspace({
   }, [resize, stopResizing]);
 
   const idleHelpYesReason =
-    idleReasons.find((reason) => reason.code === "stuck") ??
-    FALLBACK_IDLE_REASONS.find((reason) => reason.code === "stuck");
+    idleReasons.find((reason) => reason.code === "stuck-idle") ??
+    FALLBACK_IDLE_REASONS.find((reason) => reason.code === "stuck-idle")!;
 
   const idleHelpNoReasons = idleReasons.filter(
-    (reason) => reason.code !== "stuck",
+    (reason) => reason.code !== "stuck-idle",
   );
 
   return (

@@ -13,9 +13,10 @@ export interface AgentChatMessage {
   hint_type?: string;
 }
 
-export interface IdleReason {
+export interface StuckReason {
   id: string;
   code: string;
+  stuck_type: "idle" | "error";
   description: string;
   created_at: string;
 }
@@ -40,7 +41,7 @@ interface TriggerSystemResponse {
   hint_intervention_id: string;
 }
 
-interface ProblemIdleReasonRequest {
+interface ProblemStuckReasonRequest {
   reason_id: string;
   problem_id: string;
 }
@@ -175,24 +176,33 @@ export async function getAgentChatHistory(
   return (await response.json()) as AgentChatMessage[];
 }
 
-export async function getIdleReasons(): Promise<IdleReason[]> {
-  const response = await authorizedFetch(buildApiUrl("api/idle-reasons/"), {
-    method: "GET",
+export async function getStuckReasons(
+  stuckType: "idle" | "error",
+): Promise<StuckReason[]> {
+  const params = new URLSearchParams({
+    stuck_type: stuckType,
   });
 
+  const response = await authorizedFetch(
+    `${buildApiUrl("api/stuck-reasons/")}?${params.toString()}`,
+    {
+      method: "GET",
+    },
+  );
+
   if (!response.ok) {
-    throw new Error(`Get idle reasons failed: ${response.status}`);
+    throw new Error(`Get stuck reasons failed: ${response.status}`);
   }
 
-  const payload = (await response.json()) as PaginatedResponse<IdleReason>;
+  const payload = (await response.json()) as PaginatedResponse<StuckReason>;
   return payload.results;
 }
 
-export async function submitProblemIdleReason(
-  payload: ProblemIdleReasonRequest,
+export async function submitProblemStuckReason(
+  payload: ProblemStuckReasonRequest,
 ): Promise<void> {
   const response = await authorizedFetch(
-    buildApiUrl("api/problem-idle-reason/"),
+    buildApiUrl("api/problem-stuck-reason/"),
     {
       method: "POST",
       body: JSON.stringify(payload),
@@ -200,6 +210,6 @@ export async function submitProblemIdleReason(
   );
 
   if (!response.ok) {
-    throw new Error(`Submit problem idle reason failed: ${response.status}`);
+    throw new Error(`Submit problem stuck reason failed: ${response.status}`);
   }
 }
