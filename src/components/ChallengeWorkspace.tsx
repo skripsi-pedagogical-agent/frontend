@@ -121,6 +121,8 @@ export function ChallengeWorkspace({
       error: string | null;
       time_used: number;
       memory_used: number;
+      input: string;
+      is_hidden: boolean;
       test_case_id: string;
     }>;
   } | null>(null);
@@ -803,6 +805,8 @@ export function ChallengeWorkspace({
             error: result.error,
             time_used: result.time_used ?? 0,
             memory_used: result.memory_used ?? 0,
+            input: result.input ?? "",
+            is_hidden: result.is_hidden ?? false,
             test_case_id: result.test_case_id,
           }));
           const passedCount = judgeResults.filter(
@@ -1082,6 +1086,8 @@ export function ChallengeWorkspace({
         error: result.error,
         time_used: result.time_used ?? 0,
         memory_used: result.memory_used ?? 0,
+        input: result.input ?? "",
+        is_hidden: result.is_hidden ?? false,
         test_case_id: result.test_case_id,
       }));
 
@@ -1616,8 +1622,15 @@ export function ChallengeWorkspace({
                                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                                 )}
                                 <div className="flex-1">
-                                  <div className="text-xs font-bold text-emerald-100">
-                                    Case {index + 1}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-xs font-bold text-emerald-100">
+                                      Case {index + 1}
+                                    </div>
+                                    {result.is_hidden && (
+                                      <span className="px-1.5 py-0.5 rounded-full border border-amber-700/40 bg-amber-900/20 text-[9px] font-black uppercase tracking-widest text-amber-300">
+                                        Hidden
+                                      </span>
+                                    )}
                                   </div>
                                   <div
                                     className={cn(
@@ -1648,13 +1661,26 @@ export function ChallengeWorkspace({
                       {/* Selected Test Case Details */}
                       {lastResult.judgeResults[selectedResultTestCaseIndex] && (
                         <div className="border-t border-emerald-900/20 pt-4 space-y-3">
+                          <div className="gap-3">
+                            <div>
+                              <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                                Input
+                              </label>
+                              <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
+                                {lastResult.judgeResults[
+                                  selectedResultTestCaseIndex
+                                ].input || "Tidak ada input"}
+                              </div>
+                            </div>
+                          </div>
+
                           {lastResult.judgeResults[selectedResultTestCaseIndex]
                             .error ? (
                             <div>
                               <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
                                 Kesalahan
                               </label>
-                              <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
+                              <div className="bg-red-950/20 border border-red-900 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
                                 {
                                   lastResult.judgeResults[
                                     selectedResultTestCaseIndex
@@ -1674,8 +1700,8 @@ export function ChallengeWorkspace({
                                     lastResult.judgeResults[
                                       selectedResultTestCaseIndex
                                     ].status === "AC"
-                                      ? "border-emerald-900/30 text-emerald-100"
-                                      : "border-red-900/30 text-red-100 bg-red-950/10",
+                                      ? "border-emerald-900 text-emerald-100"
+                                      : "border-red-900/50 text-red-100 bg-red-950/10",
                                   )}
                                 >
                                   {lastResult.judgeResults[
@@ -1687,7 +1713,7 @@ export function ChallengeWorkspace({
                                 <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
                                   Output yang Diharapkan
                                 </label>
-                                <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
+                                <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
                                   {lastResult.judgeResults[
                                     selectedResultTestCaseIndex
                                   ].expected || "No expected output"}
