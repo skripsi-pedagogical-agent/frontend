@@ -1,5 +1,15 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { Send, User, Sparkles, X, Minimize2, Maximize2, Expand, Shrink, Zap } from "lucide-react";
+import {
+  Send,
+  User,
+  Sparkles,
+  X,
+  Minimize2,
+  Maximize2,
+  Expand,
+  Shrink,
+  Zap,
+} from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -55,7 +65,7 @@ const MarkdownComponents: Components = {
           wordBreak: "break-word",
           borderRadius: "0.75rem",
           margin: "0.5rem 0",
-          fontSize: "0.85rem"
+          fontSize: "0.85rem",
         }}
         className="rounded-xl shadow-sm"
       >
@@ -66,7 +76,7 @@ const MarkdownComponents: Components = {
         {...props}
         className={cn(
           className,
-          "bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-mono text-xs whitespace-pre-wrap break-words",
+          "bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-mono text-xs whitespace-pre-wrap wrap-break-word",
         )}
       >
         {children}
@@ -87,7 +97,7 @@ export interface Message {
   timestamp: Date;
 }
 
-export interface IdleHelpOption {
+export interface StuckHelpOption {
   id: string;
   description: string;
 }
@@ -102,12 +112,12 @@ interface ChatBotProps {
   setIsOpen: (open: boolean) => void;
   isMinimized: boolean;
   setIsMinimized: (minimized: boolean) => void;
-  idleHelpCheckIn: boolean;
-  idleHelpNoReasons: IdleHelpOption[];
-  idleHelpYesReason?: IdleHelpOption;
-  onIdleHelpChoiceNo: (reason: IdleHelpOption) => void;
-  onIdleHelpChoiceYes: (reason: IdleHelpOption) => void;
-  isIdleHelpSubmitting: boolean;
+  helpCheckInType: "idle" | "error" | null;
+  stuckHelpNoReasons: StuckHelpOption[];
+  stuckHelpYesReason?: StuckHelpOption;
+  onStuckHelpChoiceNo: (reason: StuckHelpOption) => void;
+  onStuckHelpChoiceYes: (reason: StuckHelpOption) => void;
+  isStuckHelpSubmitting: boolean;
   agentState:
     | "idle"
     | "thinking"
@@ -132,12 +142,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   setIsOpen,
   isMinimized,
   setIsMinimized,
-  idleHelpCheckIn,
-  idleHelpNoReasons,
-  idleHelpYesReason,
-  onIdleHelpChoiceNo,
-  onIdleHelpChoiceYes,
-  isIdleHelpSubmitting,
+  helpCheckInType,
+  stuckHelpNoReasons,
+  stuckHelpYesReason,
+  onStuckHelpChoiceNo,
+  onStuckHelpChoiceYes,
+  isStuckHelpSubmitting,
   agentState,
   embedded = false,
   isExpanded = false,
@@ -172,7 +182,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       setInput("");
       // Reset height after submit
       if (textareaRef.current) {
-         textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = "auto";
       }
     }
   };
@@ -180,11 +190,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   const lastMessagePreview = messages.length
     ? messages[messages.length - 1].content.replace(/\s+/g, " ").trim()
     : "";
-  
+
   // FIX: Trimming the message for minimized state
-  const previewLabel = lastMessagePreview.length > 50
-    ? `${lastMessagePreview.slice(0, 50)}...`
-    : lastMessagePreview;
+  const previewLabel =
+    lastMessagePreview.length > 50
+      ? `${lastMessagePreview.slice(0, 50)}...`
+      : lastMessagePreview;
 
   if (!isOpen && !embedded) return null;
 
@@ -219,7 +230,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
             </h3>
             {isMinimized && previewLabel && (
               <p
-                className="mt-0.5 text-xs text-emerald-200/80 truncate w-[200px]"
+                className="mt-0.5 text-xs text-emerald-200/80 truncate w-50"
                 title={previewLabel}
               >
                 {previewLabel}
@@ -273,26 +284,32 @@ export const ChatBot: React.FC<ChatBotProps> = ({
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 opacity-80">
                 <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 shadow-inner">
-                   <div className="scale-[0.6] origin-center translate-y-2">
-                     <PandaMascot state="happy" />
-                   </div>
+                  <div className="scale-[0.6] origin-center translate-y-2">
+                    <PandaMascot state="happy" />
+                  </div>
                 </div>
                 <div>
                   <h4 className="text-lg font-bold text-emerald-900 mb-2">
                     Aku BamBoost, siap membantu!
-                    </h4>
-                    <ul className="text-sm text-emerald-700 space-y-2 font-medium text-left bg-emerald-50 p-4 rounded-2xl border border-emerald-100 inline-block">
+                  </h4>
+                  <ul className="text-sm text-emerald-700 space-y-2 font-medium text-left bg-emerald-50 p-4 rounded-2xl border border-emerald-100 inline-block">
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">💡</span> 
-                      <span>"Bamboost, tolong kasih <b>hint</b> untuk logika ini?"</span>
+                      <span className="shrink-0">💡</span>
+                      <span>
+                        "Bamboost, tolong kasih <b>hint</b> untuk logika ini?"
+                      </span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">🧩</span> 
-                      <span>"Ada saran <b>approach (pendekatan)</b> lain nggak?"</span>
+                      <span className="shrink-0">🧩</span>
+                      <span>
+                        "Ada saran <b>approach (pendekatan)</b> lain nggak?"
+                      </span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">📝</span> 
-                      <span>"Bisa kasih <b>contoh snippet</b> yang mirip?"</span>
+                      <span className="shrink-0">📝</span>
+                      <span>
+                        "Bisa kasih <b>contoh snippet</b> yang mirip?"
+                      </span>
                     </li>
                   </ul>
                 </div>
@@ -330,30 +347,34 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 <div
                   className={cn(
                     "max-w-[85%] space-y-1",
-                    msg.role === "user" ? "items-end text-right" : "items-start text-left",
+                    msg.role === "user"
+                      ? "items-end text-right"
+                      : "items-start text-left",
                   )}
                 >
                   {/* Sender Name & Type Label */}
-                  <div className={cn(
-                    "flex items-center gap-2",
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  )}>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2",
+                      msg.role === "user" ? "justify-end" : "justify-start",
+                    )}
+                  >
                     <span className="text-[10px] font-bold tracking-wider text-emerald-800/70 uppercase">
                       {msg.role === "user" ? username : "BAMBOOST"}
                     </span>
-                    
-                  
-                    {msg.role === "assistant" && msg.type !== "observational" && (
-                       <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
-                         Balasan
-                       </span>
-                    )}
+
+                    {msg.role === "assistant" &&
+                      msg.type !== "observational" && (
+                        <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
+                          Balasan
+                        </span>
+                      )}
                   </div>
 
                   {/* Bubble */}
                   <div
                     className={cn(
-                      "p-3.5 text-sm leading-relaxed shadow-sm break-words prose prose-sm max-w-none",
+                      "p-3.5 text-sm leading-relaxed shadow-sm wrap-break-word prose prose-sm max-w-none",
                       msg.role === "user"
                         ? "bg-emerald-700 text-white rounded-2xl rounded-tr-none prose-invert"
                         : "bg-white text-slate-800 border border-emerald-100/60 rounded-2xl rounded-tl-none font-medium prose-emerald",
@@ -376,36 +397,37 @@ export const ChatBot: React.FC<ChatBotProps> = ({
               </div>
             ))}
 
-            {/* Proactive Idle Help Check-in */}
-            {idleHelpCheckIn && (
+            {/* Proactive Help Check-in */}
+            {helpCheckInType !== null && (
               <div className="space-y-4 pt-4 border-t border-emerald-200/50">
                 <div className="bg-white border-2 border-amber-200 rounded-3xl shadow-md p-5 text-left relative overflow-hidden">
-                
                   <p className="text-sm font-bold text-slate-800 mb-5">
-                    Saya perhatikan kamu terdiam cukup lama. Ada yang bikin bingung?
+                    {helpCheckInType === "error"
+                      ? "Kelihatannya kamu kesulitan memperbaiki error. Ada yang bingung?"
+                      : "Saya perhatikan kamu terdiam cukup lama. Ada yang bikin bingung?"}
                   </p>
                   <div className="grid gap-2.5">
-                    {idleHelpNoReasons.map((reason) => (
+                    {stuckHelpNoReasons.map((reason) => (
                       <button
                         key={reason.id}
                         type="button"
-                        disabled={isIdleHelpSubmitting}
-                        onClick={() => onIdleHelpChoiceNo(reason)}
+                        disabled={isStuckHelpSubmitting}
+                        onClick={() => onStuckHelpChoiceNo(reason)}
                         className="w-full text-left text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
                       >
                         {reason.description}
                       </button>
                     ))}
-                    {idleHelpYesReason && (
+                    {stuckHelpYesReason && (
                       <button
                         type="button"
-                        disabled={isIdleHelpSubmitting}
-                        onClick={() => onIdleHelpChoiceYes(idleHelpYesReason)}
+                        disabled={isStuckHelpSubmitting}
+                        onClick={() => onStuckHelpChoiceYes(stuckHelpYesReason)}
                         className="w-full text-left text-xs font-bold text-emerald-900 bg-emerald-100 border border-emerald-200 rounded-xl px-4 py-3 hover:bg-emerald-200 transition-colors disabled:opacity-50 mt-2"
                       >
-                        {isIdleHelpSubmitting
+                        {isStuckHelpSubmitting
                           ? "Memuat hint..."
-                          : "Ya, beri saya hint logika."}
+                          : "Ya, beri saya hint."}
                       </button>
                     )}
                   </div>
@@ -421,7 +443,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     <PandaMascot state="thinking" />
                   </div>
                 </div>
-                <div className="bg-white border border-emerald-100 px-4 py-3.5 rounded-2xl rounded-tl-none shadow-sm flex items-center h-[42px]">
+                <div className="bg-white border border-emerald-100 px-4 py-3.5 rounded-2xl rounded-tl-none shadow-sm flex items-center h-10.5">
                   <div className="flex gap-1.5">
                     <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
@@ -444,30 +466,29 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleSubmit(e);
                   }
                 }}
                 placeholder={
-                  disabled
-                    ? "Tantangan selesai."
-                    : "Ketik pertanyaanmu..."
+                  disabled ? "Tantangan selesai." : "Ketik pertanyaanmu..."
                 }
                 disabled={disabled}
-                className="flex-1 w-full min-h-[44px] overflow-y-auto resize-none bg-emerald-50/50 border border-emerald-200 rounded-xl py-3 pl-4 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all placeholder:text-emerald-700/40 font-medium text-emerald-950 whitespace-pre-wrap break-words"
-                style={{ maxHeight: '120px' }}
+                className="flex-1 w-full min-h-11 overflow-y-auto resize-none bg-emerald-50/50 border border-emerald-200 rounded-xl py-3 pl-4 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all placeholder:text-emerald-700/40 font-medium text-emerald-950 whitespace-pre-wrap wrap-break-word"
+                style={{ maxHeight: "120px" }}
               />
               <button
                 type="submit"
                 disabled={disabled || !input.trim() || isTyping}
-                className="h-[44px] w-[44px] flex items-center justify-center bg-emerald-700 text-white rounded-xl hover:bg-emerald-600 disabled:bg-emerald-100 disabled:text-emerald-400 shrink-0 shadow-sm"
+                className="h-11 w-11 flex items-center justify-center bg-emerald-700 text-white rounded-xl hover:bg-emerald-600 disabled:bg-emerald-100 disabled:text-emerald-400 shrink-0 shadow-sm"
               >
                 <Send className="w-4 h-4 ml-0.5" />
               </button>
             </div>
             <div className="text-[10px] text-center text-emerald-600/60 mt-2 font-medium">
-              Bamboost dapat membuat kesalahan. Tekan Shift + Enter untuk garis baru.
+              Bamboost dapat membuat kesalahan. Tekan Shift + Enter untuk garis
+              baru.
             </div>
           </form>
         </>

@@ -87,6 +87,28 @@ const FALLBACK_IDLE_REASONS: StuckReason[] = [
   },
 ];
 
+const FALLBACK_ERROR_REASONS: StuckReason[] = [
+  {
+    id: "error-understanding",
+    code: "error-understanding",
+    stuck_type: "error",
+    description: "Tidak, saya sedang membetulkan error",
+    created_at: "",
+  },
+  {
+    id: "stuck-error",
+    code: "stuck-error",
+    stuck_type: "error",
+    description: "Ya, saya bingung errornya",
+    created_at: "",
+  },
+];
+
+const FALLBACK_STUCK_REASONS: StuckReason[] = [
+  ...FALLBACK_IDLE_REASONS,
+  ...FALLBACK_ERROR_REASONS,
+];
+
 interface ChallengeWorkspaceProps {
   username: string;
   problem: Problem;
@@ -149,11 +171,13 @@ export function ChallengeWorkspace({
   const [isTyping, setIsTyping] = useState(false);
 
   const [submitIdleTime, setSubmitIdleTime] = useState(0);
-  const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
-  const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
-  const [idleReasons, setIdleReasons] = useState<StuckReason[]>(
-    FALLBACK_IDLE_REASONS,
+  const [stuckReasons, setStuckReasons] = useState<StuckReason[]>(
+    FALLBACK_STUCK_REASONS,
   );
+  const [helpCheckInType, setHelpCheckInType] = useState<
+    "idle" | "error" | null
+  >(null);
+  const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [deletionCount, setDeletionCount] = useState(0);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
@@ -241,7 +265,7 @@ export function ChallengeWorkspace({
     setAgentState("idle");
     setChatMessages([]);
     setSubmitIdleTime(0);
-    setIdleHelpCheckIn(false);
+    setHelpCheckInType(null);
     setErrorCount(0);
     setDeletionCount(0);
     setIsHistoryLoaded(false);
@@ -310,25 +334,31 @@ export function ChallengeWorkspace({
   useEffect(() => {
     let isCancelled = false;
 
-    const loadIdleReasons = async () => {
+    const loadStuckReasons = async () => {
       if (!isBackendProblem) {
         return;
       }
 
       try {
-        const reasons = await getStuckReasons("idle");
+        const [idleReasonsVal, errorReasonsVal] = await Promise.all([
+          getStuckReasons("idle").catch(() => []),
+          getStuckReasons("error").catch(() => []),
+        ]);
 
-        if (isCancelled || reasons.length === 0) {
+        if (
+          isCancelled ||
+          (idleReasonsVal.length === 0 && errorReasonsVal.length === 0)
+        ) {
           return;
         }
 
-        setIdleReasons(reasons);
+        setStuckReasons([...idleReasonsVal, ...errorReasonsVal]);
       } catch (error) {
         console.error("Failed to load stuck reasons:", error);
       }
     };
 
-    void loadIdleReasons();
+    void loadStuckReasons();
 
     return () => {
       isCancelled = true;
@@ -530,60 +560,20 @@ export function ChallengeWorkspace({
       return;
     }
 
-    // Mark sebagai triggered untuk error level ini
+    if (latestSessionIdRef.current) {
+      void logTelemetry({
+        problem: problem.id,
+        action_type: "STUCK_ERROR_DETECTED",
+        hint_type: "",
+        code_snapshot: code,
+        metadata: { error_count: errorCount },
+      });
+    }
+
     lastErrorTriggerCountRef.current = errorCount;
-
-    const triggerErrorHint = async () => {
-      try {
-        if (isBackendProblem) {
-          const authUser = getStoredAuthUser();
-
-          if (authUser?.id) {
-            const response = await triggerAgentSystemIntervention({
-              user_id: authUser.id,
-              problem_id: problem.id,
-              current_user_code: code,
-              trigger_type: "error_burst",
-              trigger_payload: { error_count: errorCount },
-            });
-
-            if (latestSessionIdRef.current) {
-              void logTelemetry({
-                problem: problem.id,
-                action_type: "STUCK_ERROR_DETECTED",
-                hint_type: "",
-                code_snapshot: code,
-                metadata: { error_count: errorCount },
-              });
-            }
-
-            const newMessage: Message = {
-              id: response.ai_message.id,
-              role: "assistant",
-              content: response.ai_message.message,
-              type: "observational",
-              timestamp: new Date(response.ai_message.created_at),
-            };
-
-            // Only show message AFTER successful response
-            setAgentState("stuck");
-            setAgentMessage(
-              `Hi ${username}, kamu kelihatan stuck. Aku kirim hint ke chat ya.`,
-            );
-            setChatMessages((prev) => [...prev, newMessage]);
-            setIsChatOpen(true);
-            setHasClickedMascot(true);
-            setAgentState("talking");
-            return;
-          }
-        }
-      } catch {
-        setAgentState("sad");
-        setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
-      }
-    };
-
-    void triggerErrorHint();
+    setAgentMessage(null);
+    setAgentState("idle");
+    setHelpCheckInType("error");
   }, [
     errorCount,
     isBackendProblem,
@@ -594,7 +584,7 @@ export function ChallengeWorkspace({
   ]);
 
   useEffect(() => {
-    if (isInteractionLocked || !isBackendProblem || idleHelpCheckIn) {
+    if (isInteractionLocked || !isBackendProblem || helpCheckInType !== null) {
       return;
     }
 
@@ -621,16 +611,16 @@ export function ChallengeWorkspace({
     lastIdleTriggerTimeRef.current = submitIdleTime;
     setAgentMessage(null);
     setAgentState("idle");
-    setIdleHelpCheckIn(true);
+    setHelpCheckInType("idle");
   }, [
     submitIdleTime,
     isInteractionLocked,
     isBackendProblem,
-    idleHelpCheckIn,
+    helpCheckInType,
     problem.id,
   ]);
 
-  const handleIdleHelpChoiceNo = useCallback(
+  const handleStuckHelpChoiceNo = useCallback(
     async (reason: StuckReason) => {
       setIsIdleHelpSubmitting(true);
 
@@ -660,7 +650,7 @@ export function ChallengeWorkspace({
       } catch (error) {
         console.error("Failed to submit stuck reason:", error);
       } finally {
-        setIdleHelpCheckIn(false);
+        setHelpCheckInType(null);
         setSubmitIdleTime(0);
         lastIdleTriggerTimeRef.current = 0;
         setAgentState("idle");
@@ -670,10 +660,10 @@ export function ChallengeWorkspace({
     [isBackendProblem, problem.id],
   );
 
-  const handleIdleHelpChoiceYes = useCallback(
+  const handleStuckHelpChoiceYes = useCallback(
     async (reason: StuckReason) => {
       if (!isBackendProblem || isInteractionLocked) {
-        setIdleHelpCheckIn(false);
+        setHelpCheckInType(null);
         setSubmitIdleTime(0);
         lastIdleTriggerTimeRef.current = 0;
         return;
@@ -729,7 +719,7 @@ export function ChallengeWorkspace({
           timestamp: new Date(response.ai_message.created_at),
         };
 
-        setIdleHelpCheckIn(false);
+        setHelpCheckInType(null);
         setSubmitIdleTime(0);
         lastIdleTriggerTimeRef.current = 0;
         setAgentState("stuck");
@@ -743,7 +733,7 @@ export function ChallengeWorkspace({
       } catch {
         setAgentState("sad");
         setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
-        setIdleHelpCheckIn(false);
+        setHelpCheckInType(null);
         setSubmitIdleTime(0);
         lastIdleTriggerTimeRef.current = 0;
       } finally {
@@ -1191,8 +1181,8 @@ export function ChallengeWorkspace({
     // Reset idle timer whenever user actively chats with the chatbot.
     setSubmitIdleTime(0);
     lastIdleTriggerTimeRef.current = 0;
-    if (idleHelpCheckIn) {
-      setIdleHelpCheckIn(false);
+    if (helpCheckInType !== null) {
+      setHelpCheckInType(null);
     }
 
     setChatMessages((prev) => [...prev, optimisticUserMessage]);
@@ -1305,12 +1295,17 @@ export function ChallengeWorkspace({
     };
   }, [resize, stopResizing]);
 
-  const idleHelpYesReason =
-    idleReasons.find((reason) => reason.code === "stuck-idle") ??
-    FALLBACK_IDLE_REASONS.find((reason) => reason.code === "stuck-idle")!;
+  const activeStuckReasons =
+    stuckReasons.filter((r) => r.stuck_type === helpCheckInType) || [];
 
-  const idleHelpNoReasons = idleReasons.filter(
-    (reason) => reason.code !== "stuck-idle",
+  const yesCode = helpCheckInType === "error" ? "stuck-error" : "stuck-idle";
+
+  const stuckHelpYesReason =
+    activeStuckReasons.find((reason) => reason.code === yesCode) ??
+    FALLBACK_STUCK_REASONS.find((reason) => reason.code === yesCode)!;
+
+  const stuckHelpNoReasons = activeStuckReasons.filter(
+    (reason) => reason.code !== yesCode,
   );
 
   return (
@@ -1819,7 +1814,7 @@ export function ChallengeWorkspace({
               </button>
 
               <AnimatePresence mode="wait">
-                {idleHelpCheckIn && (!isChatOpen || isMinimized) && (
+                {helpCheckInType !== null && (!isChatOpen || isMinimized) && (
                   <motion.div
                     key="idle-help-check-in"
                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
@@ -1829,38 +1824,40 @@ export function ChallengeWorkspace({
                   >
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
                     <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
-                      Sudah cukup lama tanpa submit. Butuh bantuan?
+                      {helpCheckInType === "error"
+                        ? "Kamu kelihatannya kesulitan memperbaiki error. Butuh bantuan?"
+                        : "Sudah cukup lama tanpa submit. Butuh bantuan?"}
                     </p>
                     <div className="flex flex-col gap-2">
-                      {idleHelpNoReasons.map((reason) => (
+                      {stuckHelpNoReasons.map((reason) => (
                         <button
                           key={reason.id}
                           type="button"
                           disabled={isIdleHelpSubmitting}
-                          onClick={() => void handleIdleHelpChoiceNo(reason)}
+                          onClick={() => void handleStuckHelpChoiceNo(reason)}
                           className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
                         >
                           {reason.description}
                         </button>
                       ))}
-                      {idleHelpYesReason && (
+                      {stuckHelpYesReason && (
                         <button
                           type="button"
                           disabled={isIdleHelpSubmitting}
                           onClick={() =>
-                            void handleIdleHelpChoiceYes(idleHelpYesReason)
+                            void handleStuckHelpChoiceYes(stuckHelpYesReason)
                           }
                           className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
                         >
                           {isIdleHelpSubmitting
                             ? "Memuat…"
-                            : idleHelpYesReason.description}
+                            : stuckHelpYesReason.description}
                         </button>
                       )}
                     </div>
                   </motion.div>
                 )}
-                {!idleHelpCheckIn &&
+                {helpCheckInType === null &&
                   agentMessage &&
                   (!isChatOpen || isMinimized) && (
                     <motion.div
@@ -1895,12 +1892,12 @@ export function ChallengeWorkspace({
         isExpanded={isExpanded}
         setIsExpanded={setIsExpanded}
         agentState={agentState}
-        idleHelpCheckIn={idleHelpCheckIn}
-        idleHelpNoReasons={idleHelpNoReasons}
-        idleHelpYesReason={idleHelpYesReason}
-        onIdleHelpChoiceNo={handleIdleHelpChoiceNo}
-        onIdleHelpChoiceYes={handleIdleHelpChoiceYes}
-        isIdleHelpSubmitting={isIdleHelpSubmitting}
+        helpCheckInType={helpCheckInType}
+        stuckHelpNoReasons={stuckHelpNoReasons}
+        stuckHelpYesReason={stuckHelpYesReason}
+        onStuckHelpChoiceNo={handleStuckHelpChoiceNo}
+        onStuckHelpChoiceYes={handleStuckHelpChoiceYes}
+        isStuckHelpSubmitting={isIdleHelpSubmitting}
       />
 
       <footer className="h-8 bg-emerald-950 text-emerald-100 px-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
