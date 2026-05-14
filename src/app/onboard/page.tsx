@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { PandaMascot } from "@/src/components/PandaMascot";
@@ -12,7 +12,7 @@ import {
   type RegisterRequest,
 } from "@/src/services/authService";
 
-export default function OnboardPage() {
+function OnboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -75,7 +75,8 @@ export default function OnboardPage() {
   const passwordsMatch =
     registerForm.password === registerForm.password_confirm;
   const passwordValidationActive =
-    registerForm.password.length > 0 || registerForm.password_confirm.length > 0;
+    registerForm.password.length > 0 ||
+    registerForm.password_confirm.length > 0;
   const passwordMismatch = passwordValidationActive && !passwordsMatch;
 
   const handleRegister = async (e: FormEvent) => {
@@ -207,7 +208,11 @@ export default function OnboardPage() {
                   className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
                   tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
               <button
@@ -265,7 +270,11 @@ export default function OnboardPage() {
                   className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
                   tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
               <div className="relative">
@@ -289,7 +298,11 @@ export default function OnboardPage() {
                   className="absolute inset-y-0 right-3 flex items-center text-emerald-600"
                   tabIndex={-1}
                 >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showConfirmPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
               {passwordMismatch && (
@@ -315,5 +328,13 @@ export default function OnboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardContent />
+    </Suspense>
   );
 }
