@@ -44,6 +44,15 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function formatTime(seconds: number) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hrs > 0)
+    return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 type AgentState =
   | "idle"
   | "thinking"
@@ -55,6 +64,8 @@ type AgentState =
   | "mad";
 
 const SUBMIT_IDLE_PROMPT_SECONDS = 120;
+const TIME_TAKEN_LIMIT_SECONDS = 15 * 60; // 15 minutes
+const TIME_TAKEN_WARNING_MARGIN = 30; // seconds before limit to show warning
 
 const FALLBACK_IDLE_REASONS: IdleReason[] = [
   {
@@ -143,6 +154,9 @@ export function ChallengeWorkspace({
   const [isTyping, setIsTyping] = useState(false);
 
   const [submitIdleTime, setSubmitIdleTime] = useState(0);
+  const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
+  const [timeTakenSeconds, setTimeTakenSeconds] = useState(0);
+  const [showTimeTaken, setShowTimeTaken] = useState(false);
   const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
   const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
   const [idleReasons, setIdleReasons] = useState<IdleReason[]>(
@@ -241,6 +255,8 @@ export function ChallengeWorkspace({
     setIsHistoryLoaded(false);
     setIsEditorSessionLoaded(false);
     setIsInteractionLocked(false);
+    setOpenedAt(Date.now());
+    setTimeTakenSeconds(0);
     lastIdleTriggerTimeRef.current = 0;
     lastErrorTriggerCountRef.current = 0;
     hasGreetedRef.current = false; // Reset greeting status untuk problem baru
@@ -474,12 +490,15 @@ export function ChallengeWorkspace({
   }, [chatMessages.length, isHistoryLoaded, username]);
 
   useEffect(() => {
+    // Update both submit idle timer and time-taken (since problem opened)
+    setTimeTakenSeconds(Math.floor((Date.now() - openedAt) / 1000));
     const interval = setInterval(() => {
       setSubmitIdleTime((prev) => prev + 1);
+      setTimeTakenSeconds(Math.floor((Date.now() - openedAt) / 1000));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [openedAt]);
 
   // 1. Effect untuk memunculkan pesan saat idle mencapai 60 detik
   useEffect(() => {
@@ -1335,16 +1354,26 @@ export function ChallengeWorkspace({
             </div>
           )}
           {!isInteractionLocked && (
-            <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
+            <div
+              role="button"
+              onClick={() => setShowTimeTaken((s) => !s)}
+              title={
+                showTimeTaken ? "Sembunyikan waktu" : "Klik untuk lihat waktu"
+              }
+              className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50 cursor-pointer select-none"
+            >
               <div
                 className={cn(
                   "w-2 h-2 rounded-full",
-                  submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
+                  timeTakenSeconds >
+                    TIME_TAKEN_LIMIT_SECONDS - TIME_TAKEN_WARNING_MARGIN
                     ? "bg-amber-700 animate-pulse"
                     : "bg-emerald-700",
                 )}
               />
-              Idle: {submitIdleTime}s | Errors: {errorCount}
+              {showTimeTaken ? (
+                <span>Time taken: {formatTime(timeTakenSeconds)}</span>
+              ) : null}
             </div>
           )}
           <button
