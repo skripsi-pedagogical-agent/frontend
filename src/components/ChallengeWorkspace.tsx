@@ -5,15 +5,30 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronRight,
+  ClipboardList,
+  FlaskConical,
+  GripVertical,
   HelpCircle,
+  ListChecks,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Play,
+  Timer,
+  TimerOff,
   Terminal as TerminalIcon,
+  Upload,
+  X,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import NextImage from "next/image";
+import imgWorkspace from "@/src/images/messageImage_1778781856852.jpg";
+import imgBamboostHelp from "@/src/images/messageImage_1778781812364.jpg";
+import imgTestcase from "@/src/images/messageImage_1778781874816.jpg";
 import { ChatBot, type Message } from "@/src/components/ChatBot";
 import { CodeEditor } from "@/src/components/CodeEditor";
 import { PandaMascot } from "@/src/components/PandaMascot";
@@ -52,7 +67,44 @@ type AgentState =
   | "talking"
   | "confused"
   | "sad"
-  | "mad";
+  | "mad"
+  | "sleeping";
+
+type ResizeMode = "console" | "problem" | "assistant" | null;
+
+const TUTORIAL_STORAGE_PREFIX = "bamboost:challenge-tutorial:v1";
+const WORK_SESSION_STORAGE_PREFIX = "bamboost:challenge-work-session:v1";
+
+const TUTORIAL_SLIDES = [
+  {
+    title: "Selamat datang di Bamboost!",
+    description:
+      "Di sini kamu bisa membaca soal, menulis kode, mencoba test case, dan berdiskusi dengan Bamboost saat butuh arah.",
+    image: null,
+    mascotState: "happy" as AgentState,
+  },
+  {
+    title: "Kenali workspace-mu",
+    description:
+      "Panel kiri berisi detail soal, area tengah adalah code editor, dan panel kanan adalah ruang Bamboost. Border antar panel bisa digeser sesuai kebutuhanmu.",
+    image: imgWorkspace,
+    mascotState: "idle" as AgentState,
+  },
+  {
+    title: "Bamboost bisa bantu apa?",
+    description:
+      "Kamu bisa meminta hint, pendekatan alternatif, contoh snippet yang mirip, atau penjelasan singkat tanpa langsung diberi jawaban penuh.",
+    image: imgBamboostHelp,
+    mascotState: "talking" as AgentState,
+  },
+  {
+    title: "Test case dan submit",
+    description:
+      "Gunakan Jalankan Test Case untuk mencoba input contoh. Jika hasilnya sudah yakin, gunakan Submit Kode untuk penilaian akhir dari semua test case.",
+    image: imgTestcase,
+    mascotState: "thinking" as AgentState,
+  },
+];
 
 const SUBMIT_IDLE_PROMPT_SECONDS = 120;
 
@@ -105,7 +157,7 @@ export function ChallengeWorkspace({
       expectedOutput: "No test case available.",
     };
 
-  const [consoleTab, setConsoleTab] = useState<"testcase" | "result">(
+  const [consoleTab, setConsoleTab] = useState<"testcase" | "result" | "console">(
     "testcase",
   );
   const [lastResult, setLastResult] = useState<{
@@ -127,12 +179,19 @@ export function ChallengeWorkspace({
   const [selectedResultTestCaseIndex, setSelectedResultTestCaseIndex] =
     useState(0);
   const [consoleHeight, setConsoleHeight] = useState(256);
-  const [isResizing, setIsResizing] = useState(false);
+  const [resizeMode, setResizeMode] = useState<ResizeMode>(null);
+  const [isProblemPanelOpen, setIsProblemPanelOpen] = useState(true);
+  const [problemPanelWidth, setProblemPanelWidth] = useState(420);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(420);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   const [code, setCode] = useState(problem.starterCode);
   const [output, setOutput] = useState<string[]>([]);
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [agentState, setAgentState] = useState<AgentState>("idle");
+  const [isRunningPlain, setIsRunningPlain] = useState(false);
+  const [agentState, setAgentState] = useState<AgentState>("sleeping");
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
 
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -143,6 +202,9 @@ export function ChallengeWorkspace({
   const [isTyping, setIsTyping] = useState(false);
 
   const [submitIdleTime, setSubmitIdleTime] = useState(0);
+  const [timeTaken, setTimeTaken] = useState(0);
+  const [showTimeTaken, setShowTimeTaken] = useState(true);
+  const [isWorkStarted, setIsWorkStarted] = useState(false);
   const [idleHelpCheckIn, setIdleHelpCheckIn] = useState(false);
   const [isIdleHelpSubmitting, setIsIdleHelpSubmitting] = useState(false);
   const [idleReasons, setIdleReasons] = useState<IdleReason[]>(
@@ -165,6 +227,9 @@ export function ChallengeWorkspace({
   const lastIdleTriggerTimeRef = useRef(0);
   const lastErrorTriggerCountRef = useRef(0);
   const hasGreetedRef = useRef(false);
+  const currentUserId = getStoredAuthUser()?.id ?? "anonymous";
+  const tutorialStorageKey = `${TUTORIAL_STORAGE_PREFIX}:${currentUserId}:${problem.id}`;
+  const workSessionStorageKey = `${WORK_SESSION_STORAGE_PREFIX}:${currentUserId}:${problem.id}`;
 
   const isBackendProblem =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -225,16 +290,40 @@ export function ChallengeWorkspace({
   }, [lastResult]);
 
   useEffect(() => {
+    let storedWorkStarted = false;
+    let storedTimeTaken = 0;
+
+    try {
+      const storedSession = window.localStorage.getItem(workSessionStorageKey);
+
+      if (storedSession) {
+        const parsedSession = JSON.parse(storedSession) as {
+          started?: boolean;
+          timeTaken?: number;
+        };
+
+        storedWorkStarted = Boolean(parsedSession.started);
+        storedTimeTaken = Math.max(0, Number(parsedSession.timeTaken) || 0);
+      }
+    } catch {
+      storedWorkStarted = false;
+      storedTimeTaken = 0;
+    }
+
     setCode(problem.starterCode);
     setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
+    setConsoleOutput([]);
     setLastResult(null);
     setSelectedResultTestCaseIndex(0);
     setConsoleTab("testcase");
     setAgentMessage(null);
-    setAgentState("idle");
+    setAgentState(storedWorkStarted ? "idle" : "sleeping");
     setChatMessages([]);
     setSubmitIdleTime(0);
+    setTimeTaken(storedTimeTaken);
+    setShowTimeTaken(true);
+    setIsWorkStarted(storedWorkStarted);
     setIdleHelpCheckIn(false);
     setErrorCount(0);
     setDeletionCount(0);
@@ -252,7 +341,17 @@ export function ChallengeWorkspace({
       clearTimeout(saveDebounceTimerRef.current);
       saveDebounceTimerRef.current = null;
     }
-  }, [problem]);
+  }, [problem, workSessionStorageKey]);
+
+  useEffect(() => {
+    setTutorialStep(0);
+
+    try {
+      setIsTutorialOpen(window.localStorage.getItem(tutorialStorageKey) !== "seen");
+    } catch {
+      setIsTutorialOpen(true);
+    }
+  }, [tutorialStorageKey]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -280,6 +379,10 @@ export function ChallengeWorkspace({
         lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
         latestStatusIdRef.current = session.status_id;
         setIsInteractionLocked(session.status_id === 2);
+        if (session.status_id === 2) {
+          setIsWorkStarted(true);
+          setAgentState("idle");
+        }
 
         if (!hasUserTypedRef.current && session.code) {
           setCode(session.code);
@@ -421,12 +524,12 @@ export function ChallengeWorkspace({
           content: item.message,
           type: "observational",
           timestamp: new Date(item.created_at),
+          proactive: item.trigger_source === "EVENT",
         }));
 
         setChatMessages(mappedHistory);
 
         if (mappedHistory.length > 0) {
-          setIsChatOpen(true);
           setHasClickedMascot(true);
         }
       } catch (error) {
@@ -451,7 +554,7 @@ export function ChallengeWorkspace({
     }
 
     // Gunakan ref untuk memastikan greeting hanya tereksekusi 1x
-    if (chatMessages.length === 0 && !hasGreetedRef.current) {
+    if (isWorkStarted && chatMessages.length === 0 && !hasGreetedRef.current) {
       hasGreetedRef.current = true; // Tandai bahwa user sudah disapa
 
       const welcomes = [
@@ -471,19 +574,43 @@ export function ChallengeWorkspace({
     }
 
     return undefined;
-  }, [chatMessages.length, isHistoryLoaded, username]);
+  }, [chatMessages.length, isHistoryLoaded, isWorkStarted, username]);
 
   useEffect(() => {
+    if (!isWorkStarted) {
+      return undefined;
+    }
+
     const interval = setInterval(() => {
-      setSubmitIdleTime((prev) => prev + 1);
+      if (!isInteractionLocked) {
+        setSubmitIdleTime((prev) => prev + 1);
+        setTimeTaken((prev) => {
+          const nextTimeTaken = prev + 1;
+
+          try {
+            window.localStorage.setItem(
+              workSessionStorageKey,
+              JSON.stringify({
+                started: true,
+                timeTaken: nextTimeTaken,
+              }),
+            );
+          } catch {
+            // Time can continue in memory if localStorage is unavailable.
+          }
+
+          return nextTimeTaken;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isInteractionLocked, isWorkStarted, workSessionStorageKey]);
 
   // 1. Effect untuk memunculkan pesan saat idle mencapai 60 detik
   useEffect(() => {
     if (
+      isWorkStarted &&
       submitIdleTime === 60 &&
       !agentMessage &&
       (!isChatOpen || isMinimized)
@@ -493,7 +620,7 @@ export function ChallengeWorkspace({
         "Butuh bantuan dengan logika? Saya bisa beri petunjuk di chat.",
       );
     }
-  }, [agentMessage, submitIdleTime, isChatOpen, isMinimized]);
+  }, [agentMessage, isWorkStarted, submitIdleTime, isChatOpen, isMinimized]);
 
   // 2. Effect terpisah khusus untuk menghilangkan pesan setelah 15 detik
   useEffect(() => {
@@ -510,9 +637,22 @@ export function ChallengeWorkspace({
     }
   }, [agentMessage]);
 
+  useEffect(() => {
+    if (!agentMessage || isChatOpen || idleHelpCheckIn) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAgentMessage(null);
+      setAgentState("idle");
+    }, 30000);
+
+    return () => clearTimeout(timer);
+  }, [agentMessage, idleHelpCheckIn, isChatOpen]);
+
   // Effect untuk error burst intervention
   useEffect(() => {
-    if (isInteractionLocked) return;
+    if (!isWorkStarted || isInteractionLocked) return;
 
     const shouldTriggerOnError =
       errorCount > 0 &&
@@ -557,6 +697,7 @@ export function ChallengeWorkspace({
               content: response.ai_message.message,
               type: "observational",
               timestamp: new Date(response.ai_message.created_at),
+              proactive: true,
             };
 
             // Only show message AFTER successful response
@@ -585,10 +726,11 @@ export function ChallengeWorkspace({
     code,
     username,
     isInteractionLocked,
+    isWorkStarted,
   ]);
 
   useEffect(() => {
-    if (isInteractionLocked || !isBackendProblem || idleHelpCheckIn) {
+    if (!isWorkStarted || isInteractionLocked || !isBackendProblem || idleHelpCheckIn) {
       return;
     }
 
@@ -619,6 +761,7 @@ export function ChallengeWorkspace({
   }, [
     submitIdleTime,
     isInteractionLocked,
+    isWorkStarted,
     isBackendProblem,
     idleHelpCheckIn,
     problem.id,
@@ -719,6 +862,7 @@ export function ChallengeWorkspace({
           content: response.ai_message.message,
           type: "observational",
           timestamp: new Date(response.ai_message.created_at),
+          proactive: true,
         };
 
         setIdleHelpCheckIn(false);
@@ -752,7 +896,7 @@ export function ChallengeWorkspace({
   );
 
   const handleCodeChange = (newCode: string | undefined) => {
-    if (newCode === undefined || isInteractionLocked) return;
+    if (newCode === undefined || !isWorkStarted || isInteractionLocked) return;
 
     hasUserTypedRef.current = true;
 
@@ -773,10 +917,63 @@ export function ChallengeWorkspace({
     }
   };
 
+  const runPlain = () => {
+    if (!isWorkStarted || isInteractionLocked || isRunning || isRunningPlain) return;
+
+    setConsoleOutput([]);
+    setConsoleTab("console");
+
+    // Always run via Skulpt (client-side) — no backend endpoint needed for plain stdout
+    setIsRunningPlain(true);
+    const outputBuffer: string[] = [];
+    let currentLine = "";
+
+    // @ts-ignore
+    Sk.configure({
+      output: (text: string) => {
+        currentLine += text;
+        const parts = currentLine.split("\n");
+        currentLine = parts.pop() || "";
+        outputBuffer.push(...parts);
+      },
+      read: (x: string) => {
+        // @ts-ignore
+        if (Sk.builtinFiles === undefined || Sk.builtinFiles.files[x] === undefined) {
+          throw new Error(`File not found: '${x}'`);
+        }
+        // @ts-ignore
+        return Sk.builtinFiles.files[x];
+      },
+      execLimit: 5000,
+    });
+
+    // @ts-ignore
+    const runPromise = Sk.misceval.asyncToPromise(() => {
+      // @ts-ignore
+      return Sk.importMainWithBody("<stdin>", false, code, true);
+    });
+
+    runPromise.then(
+      () => {
+        if (currentLine) outputBuffer.push(currentLine);
+        setConsoleOutput(outputBuffer.length > 0 ? outputBuffer : ["(tanpa output)"]);
+        setIsRunningPlain(false);
+      },
+      (err: unknown) => {
+        setConsoleOutput([`Error: ${String(err)}`]);
+        setIsRunningPlain(false);
+      },
+    );
+  };
+
   const runCode = (
     testCaseInput?: string,
     runOptions?: { treatAsSubmission?: boolean },
   ) => {
+    if (!isWorkStarted || isInteractionLocked) {
+      return;
+    }
+
     const isBackendProblem =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         problem.id,
@@ -1026,6 +1223,10 @@ export function ChallengeWorkspace({
   };
 
   const submitCode = async () => {
+    if (!isWorkStarted || isInteractionLocked) {
+      return;
+    }
+
     const isBackendProblem =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         problem.id,
@@ -1129,6 +1330,10 @@ export function ChallengeWorkspace({
 
         setIsInteractionLocked(true);
         latestStatusIdRef.current = 2;
+        setAgentState("happy");
+        setAgentMessage(
+          `Selamat ${username}! Semua test case lulus. Kamu berhasil menyelesaikan challenge ini!`,
+        );
       }
     } catch (err: unknown) {
       const errorMessage = String(err);
@@ -1151,6 +1356,12 @@ export function ChallengeWorkspace({
   };
 
   const handleSendMessage = async (content: string) => {
+    if (!isWorkStarted) {
+      setAgentState("sleeping");
+      setAgentMessage("Tekan Mulai Mengerjakan dulu agar Bamboost ikut aktif.");
+      return;
+    }
+
     if (isInteractionLocked) {
       setAgentState("idle");
       setAgentMessage("Challenge sudah completed. Chat dinonaktifkan.");
@@ -1264,23 +1475,55 @@ export function ChallengeWorkspace({
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizing(true);
+    setResizeMode("console");
   }, []);
 
+  const startHorizontalResize = useCallback(
+    (mode: Exclude<ResizeMode, "console" | null>) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      setResizeMode(mode);
+    },
+    [],
+  );
+
   const stopResizing = useCallback(() => {
-    setIsResizing(false);
+    setResizeMode(null);
   }, []);
 
   const resize = useCallback(
     (e: MouseEvent) => {
-      if (isResizing) {
+      if (resizeMode === "console") {
         const newHeight = window.innerHeight - e.clientY;
         if (newHeight > 100 && newHeight < window.innerHeight * 0.8) {
           setConsoleHeight(newHeight);
         }
       }
+
+      if (resizeMode === "problem") {
+        const maxProblemWidth = Math.max(
+          280,
+          Math.min(window.innerWidth * 0.45, window.innerWidth - assistantPanelWidth - 420),
+        );
+        setProblemPanelWidth(
+          Math.min(Math.max(e.clientX, 280), maxProblemWidth),
+        );
+      }
+
+      if (resizeMode === "assistant") {
+        const currentProblemWidth = isProblemPanelOpen ? problemPanelWidth : 48;
+        const maxAssistantWidth = Math.max(
+          320,
+          Math.min(window.innerWidth * 0.45, window.innerWidth - currentProblemWidth - 420),
+        );
+        setAssistantPanelWidth(
+          Math.min(
+            Math.max(window.innerWidth - e.clientX, 320),
+            maxAssistantWidth,
+          ),
+        );
+      }
     },
-    [isResizing],
+    [assistantPanelWidth, isProblemPanelOpen, problemPanelWidth, resizeMode],
   );
 
   useEffect(() => {
@@ -1300,6 +1543,46 @@ export function ChallengeWorkspace({
   const idleHelpNoReasons = idleReasons.filter(
     (reason) => reason.code !== "stuck",
   );
+
+  const isConsoleResizing = resizeMode === "console";
+  const currentTutorialSlide = TUTORIAL_SLIDES[tutorialStep];
+  const isAgentMessageLong = (agentMessage?.length ?? 0) > 180;
+  const formattedTimeTaken = `${Math.floor(timeTaken / 60)
+    .toString()
+    .padStart(2, "0")}:${(timeTaken % 60).toString().padStart(2, "0")}`;
+
+  const startWorking = useCallback(() => {
+    setIsWorkStarted(true);
+    setAgentState("idle");
+    setAgentMessage(null);
+    setSubmitIdleTime(0);
+    lastIdleTriggerTimeRef.current = 0;
+
+    try {
+      window.localStorage.setItem(
+        workSessionStorageKey,
+        JSON.stringify({
+          started: true,
+          timeTaken,
+        }),
+      );
+    } catch {
+      // The session still starts if localStorage is unavailable.
+    }
+  }, [timeTaken, workSessionStorageKey]);
+
+  const closeTutorial = useCallback(() => {
+    try {
+      window.localStorage.setItem(tutorialStorageKey, "seen");
+    } catch {
+      // Tutorial can still close if localStorage is unavailable.
+    }
+
+    setIsTutorialOpen(false);
+  }, [tutorialStorageKey]);
+
+  // Guard: never show anything other than "sleeping" before work starts
+  const displayAgentState = isWorkStarted ? agentState : "sleeping";
 
   return (
     <div className="h-screen bg-[#a8b4af] flex flex-col font-sans text-emerald-950 overflow-hidden">
@@ -1328,45 +1611,100 @@ export function ChallengeWorkspace({
 
         <div className="flex items-center gap-4">
           {isInteractionLocked && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-100 px-2.5 py-1.5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">
-                COMPLETED
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 shadow-lg shadow-emerald-400/50 ring-2 ring-emerald-300 ring-offset-1">
+              <CheckCircle2 className="h-4 w-4 text-white" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-white">
+                Selesai!
               </span>
             </div>
           )}
           {!isInteractionLocked && (
-            <div className="flex items-center gap-2 text-xs font-black text-emerald-950 bg-emerald-300/40 px-3 py-1.5 rounded-lg border border-emerald-400/50">
-              <div
-                className={cn(
-                  "w-2 h-2 rounded-full",
-                  submitIdleTime > SUBMIT_IDLE_PROMPT_SECONDS - 30
-                    ? "bg-amber-700 animate-pulse"
-                    : "bg-emerald-700",
+            <div
+              className={
+                showTimeTaken
+                  ? "flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-300/60 px-2.5 py-1.5 text-xs font-black text-emerald-950 shadow-sm"
+                  : "flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-xs font-black text-slate-400"
+              }
+            >
+              <button
+                type="button"
+                onClick={() => setShowTimeTaken((shown) => !shown)}
+                className={
+                  showTimeTaken
+                    ? "flex items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-emerald-200/70"
+                    : "flex items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-slate-200/70"
+                }
+                title={
+                  showTimeTaken
+                    ? "Sembunyikan time taken"
+                    : "Tampilkan time taken"
+                }
+              >
+                {showTimeTaken ? (
+                  <Timer className="h-4 w-4 text-emerald-700" />
+                ) : (
+                  <TimerOff className="h-4 w-4 text-slate-400" />
                 )}
-              />
-              Idle: {submitIdleTime}s | Errors: {errorCount}
+                {showTimeTaken ? (
+                  <span>Time Taken: {formattedTimeTaken}</span>
+                ) : (
+                  <span className="line-through">Timer Hidden</span>
+                )}
+              </button>
             </div>
           )}
           <button
+            onClick={() => {
+              setTutorialStep(0);
+              setIsTutorialOpen(true);
+            }}
             className="p-2 hover:bg-emerald-300/50 rounded-full transition-colors"
             type="button"
+            title="Buka tutorial"
           >
             <HelpCircle className="w-5 h-5 text-emerald-900" />
           </button>
         </div>
       </header>
 
-      <main className="flex-1 flex overflow-hidden">
-        <div className="w-[25%] flex flex-col border-r border-emerald-500/30 bg-[#e8edea] overflow-y-auto custom-scrollbar">
+      <main
+        className={cn(
+          "flex-1 flex overflow-hidden",
+          resizeMode && "select-none",
+          resizeMode === "problem" || resizeMode === "assistant"
+            ? "cursor-col-resize"
+            : "",
+        )}
+      >
+        <AnimatePresence initial={false}>
+          {isProblemPanelOpen ? (
+            <motion.aside
+              key="problem-panel"
+              layout
+              initial={{ width: 48, opacity: 0.85 }}
+              animate={{ width: problemPanelWidth, opacity: 1 }}
+              exit={{ width: 48, opacity: 0 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-col bg-[#e8edea] overflow-hidden shrink-0"
+            >
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-6 space-y-8">
             <section className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <div className="w-8 h-8 bg-emerald-900 text-white rounded-lg flex items-center justify-center">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
-                <h2 className="text-xl font-black tracking-tight text-emerald-950">
+                <h2 className="min-w-0 flex-1 text-xl font-black tracking-tight text-emerald-950">
                   {problem.title}
                 </h2>
+                <button
+                  type="button"
+                  onClick={() => setIsProblemPanelOpen(false)}
+                  className="shrink-0 rounded-lg border border-emerald-400/50 bg-white/80 p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100"
+                  title="Tutup panel soal"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
               </div>
 
               <div className="flex gap-2">
@@ -1426,9 +1764,43 @@ export function ChallengeWorkspace({
               )}
             </section>
           </div>
-        </div>
+              </div>
+            </motion.aside>
+          ) : (
+            <motion.button
+              key="problem-tab"
+              layout
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 48, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              type="button"
+              onClick={() => setIsProblemPanelOpen(true)}
+              className="flex shrink-0 flex-col items-center gap-3 border-r border-emerald-500/30 bg-[#e8edea] px-2 py-4 text-emerald-950 transition-colors hover:bg-emerald-100"
+              title="Buka panel soal"
+            >
+              <PanelLeftOpen className="h-5 w-5" />
+              <span className="rotate-180 whitespace-nowrap text-[10px] font-black uppercase tracking-widest [writing-mode:vertical-rl]">
+                Soal
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
-        <div className="flex-1 flex flex-col bg-[#1e1e1e] min-h-0 overflow-hidden">
+        {isProblemPanelOpen && (
+          <div
+            onMouseDown={startHorizontalResize("problem")}
+            className={cn(
+              "group relative z-20 flex w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-emerald-500/20 bg-[#dfe7e3] transition-colors hover:bg-emerald-300/70",
+              resizeMode === "problem" && "bg-emerald-400/80",
+            )}
+            title="Geser untuk mengatur lebar panel soal"
+          >
+            <GripVertical className="h-4 w-4 text-emerald-900/50 opacity-0 transition-opacity group-hover:opacity-100" />
+          </div>
+        )}
+
+        <div className="flex-1 flex flex-col bg-[#1e1e1e] min-h-0 min-w-[360px] overflow-hidden">
           <div className="h-12 bg-[#252526] px-4 flex items-center justify-between border-b border-[#3d3d3d] shrink-0">
             <div className="flex items-center gap-2">
               <ChevronRight className="w-4 h-4 text-emerald-500" />
@@ -1438,20 +1810,30 @@ export function ChallengeWorkspace({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={runPlain}
+                disabled={!isWorkStarted || isRunning || isRunningPlain || isInteractionLocked}
+                className="flex items-center gap-2 px-4 py-1.5 bg-[#2d2d2d] text-[#cccccc] border border-[#3d3d3d] rounded-lg text-[11px] font-bold hover:bg-[#3d3d3d] transition-all disabled:opacity-40"
+                type="button"
+              >
+                <TerminalIcon className="w-3.5 h-3.5" />
+                {isRunningPlain ? "Menjalankan..." : "Run"}
+              </button>
+              <button
                 onClick={() => runCode(selectedTestCase.input)}
-                disabled={isRunning || isInteractionLocked}
+                disabled={!isWorkStarted || isRunning || isRunningPlain || isInteractionLocked}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
                 type="button"
               >
-                <Play className="w-3.5 h-3.5 fill-current" />
+                <FlaskConical className="w-3.5 h-3.5" />
                 Jalankan Test Case
               </button>
               <button
                 onClick={() => void submitCode()}
-                disabled={isRunning || isInteractionLocked}
+                disabled={!isWorkStarted || isRunning || isInteractionLocked}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
                 type="button"
               >
+                <Upload className="w-3.5 h-3.5" />
                 Submit Kode
               </button>
             </div>
@@ -1461,15 +1843,53 @@ export function ChallengeWorkspace({
             <CodeEditor
               code={code}
               onChange={handleCodeChange}
-              readOnly={isInteractionLocked}
+              readOnly={!isWorkStarted || isInteractionLocked}
             />
+            <AnimatePresence>
+              {!isWorkStarted && (
+                <motion.div
+                  className="absolute inset-0 z-30 flex items-center justify-center bg-[#1e1e1e]/82 p-6 backdrop-blur-[2px]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <motion.div
+                    className="w-full max-w-md rounded-xl border border-emerald-500/30 bg-[#101916] p-6 text-center shadow-2xl shadow-black/35"
+                    initial={{ y: 16, scale: 0.98 }}
+                    animate={{ y: 0, scale: 1 }}
+                    exit={{ y: 12, scale: 0.98 }}
+                    transition={{ duration: 0.22 }}
+                  >
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/40 bg-emerald-500/10 text-emerald-300">
+                      <Play className="h-7 w-7 fill-current" />
+                    </div>
+                    <h2 className="text-xl font-black tracking-tight text-emerald-50">
+                      Siap mulai mengerjakan?
+                    </h2>
+                    <p className="mt-3 text-sm font-semibold leading-relaxed text-emerald-100/70">
+                      Editor dikunci sementara agar kamu bisa membaca soal dulu.
+                      Tekan mulai untuk mengaktifkan editor, test case, submit,
+                      timer, dan Bamboost.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={startWorking}
+                      className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-black text-white transition-colors hover:bg-emerald-500"
+                    >
+                      <Play className="h-4 w-4 fill-current" />
+                      Mulai Mengerjakan
+                    </button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div
             onMouseDown={startResizing}
             className={cn(
               "h-1.5 bg-[#3d3d3d] hover:bg-emerald-600 cursor-ns-resize transition-colors shrink-0 z-20",
-              isResizing && "bg-emerald-600",
+              isConsoleResizing && "bg-emerald-600",
             )}
           />
 
@@ -1488,7 +1908,7 @@ export function ChallengeWorkspace({
                 )}
                 type="button"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
+                <ClipboardList className="w-3.5 h-3.5" />
                 Testcase
               </button>
               <button
@@ -1501,20 +1921,56 @@ export function ChallengeWorkspace({
                 )}
                 type="button"
               >
-                <TerminalIcon className="w-3.5 h-3.5" />
+                <ListChecks className="w-3.5 h-3.5" />
                 Hasil Test
+              </button>
+              <button
+                onClick={() => setConsoleTab("console")}
+                className={cn(
+                  "h-full px-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
+                  consoleTab === "console"
+                    ? "text-amber-400 border-amber-500"
+                    : "text-emerald-700 border-transparent hover:text-emerald-500",
+                )}
+                type="button"
+              >
+                <TerminalIcon className="w-3.5 h-3.5" />
+                Console
+                {isRunningPlain && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                )}
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {consoleTab === "testcase" ? (
+              {consoleTab === "console" ? (
+                <div className="h-full flex flex-col">
+                  {isRunningPlain ? (
+                    <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Menjalankan kode...
+                    </div>
+                  ) : consoleOutput.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
+                      <TerminalIcon className="w-8 h-8 text-emerald-800" />
+                      <p className="text-xs font-bold text-emerald-700">
+                        Tekan <span className="text-[#cccccc] bg-[#2d2d2d] px-1.5 py-0.5 rounded font-mono">Run</span> untuk melihat output print()
+                      </p>
+                    </div>
+                  ) : (
+                    <pre className="font-mono text-xs text-emerald-100 whitespace-pre-wrap break-words leading-relaxed">
+                      {consoleOutput.join("\n")}
+                    </pre>
+                  )}
+                </div>
+              ) : consoleTab === "testcase" ? (
                 <div className="space-y-4">
                   <div className="flex gap-2">
                     {problem.testCases.map((tc) => (
                       <button
                         key={tc.id}
                         onClick={() => setSelectedTestCaseId(tc.id)}
-                        disabled={isInteractionLocked}
+                        disabled={!isWorkStarted || isInteractionLocked}
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50",
                           selectedTestCaseId === tc.id
@@ -1758,42 +2214,138 @@ export function ChallengeWorkspace({
           </div>
         </div>
 
-        <div className="w-[25%] flex flex-col border-l border-emerald-400/30 bg-white overflow-hidden">
-          <div className="flex-1 flex flex-col p-6 space-y-6">
-            <div className="flex flex-col items-center py-8 space-y-6">
-              <button
-                onClick={() => {
-                  if (isInteractionLocked) {
-                    setAgentMessage(
-                      "Challenge sudah completed. Chat dinonaktifkan.",
-                    );
-                    return;
-                  }
+        <div
+          onMouseDown={startHorizontalResize("assistant")}
+          className={cn(
+            "group relative z-20 flex w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-emerald-500/20 bg-[#dfe7e3] transition-colors hover:bg-emerald-300/70",
+            resizeMode === "assistant" && "bg-emerald-400/80",
+          )}
+          title="Geser untuk mengatur lebar panel Bamboost"
+        >
+          <GripVertical className="h-4 w-4 text-emerald-900/50 opacity-0 transition-opacity group-hover:opacity-100" />
+        </div>
 
-                  setIsChatOpen(true);
-                  setHasClickedMascot(true);
-                }}
-                className="group relative w-48 h-48 bg-transparent rounded-[4rem] flex items-center justify-center overflow-hidden transition-all hover:scale-105 active:scale-95 border-4 border-transparent hover:border-emerald-200"
-                type="button"
+        <motion.div
+          layout
+          transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+          style={{ width: assistantPanelWidth }}
+          className="flex flex-col bg-white overflow-hidden shrink-0"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            {isChatOpen ? (
+              <motion.div
+                key="chat-panel"
+                className="flex h-full min-h-0 flex-col"
+                initial={{ opacity: 0, x: 28 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div className="scale-150">
-                  <PandaMascot state={agentState} />
-                </div>
-                {!isChatOpen && !hasClickedMascot && (
-                  <div className="absolute top-4 right-4 w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-12 group-hover:rotate-0 transition-transform">
-                    <MessageSquare className="w-5 h-5 text-white" />
-                  </div>
-                )}
-              </button>
+                <ChatBot
+                  messages={chatMessages}
+                  onSendMessage={handleSendMessage}
+                  username={username}
+                  isTyping={isTyping}
+                  disabled={!isWorkStarted || isInteractionLocked}
+                  isOpen={isChatOpen}
+                  setIsOpen={setIsChatOpen}
+                  isMinimized={isMinimized}
+                  setIsMinimized={setIsMinimized}
+                  isExpanded={isExpanded}
+                  setIsExpanded={setIsExpanded}
+                  agentState={displayAgentState}
+                  idleHelpCheckIn={idleHelpCheckIn}
+                  idleHelpNoReasons={idleHelpNoReasons}
+                  idleHelpYesReason={idleHelpYesReason}
+                  onIdleHelpChoiceNo={handleIdleHelpChoiceNo}
+                  onIdleHelpChoiceYes={handleIdleHelpChoiceYes}
+                  isIdleHelpSubmitting={isIdleHelpSubmitting}
+                  embedded
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="mascot-panel"
+                className="flex-1 flex flex-col p-6 space-y-6"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex flex-col items-center py-8 space-y-6">
+                  <button
+                    onClick={() => {
+                      if (!isWorkStarted) {
+                        setAgentState("sleeping");
+                        setAgentMessage(
+                          "Bamboost masih tidur. Tekan Mulai Mengerjakan dulu ya.",
+                        );
+                        return;
+                      }
+
+                      if (isInteractionLocked) {
+                        setIsChatOpen(true);
+                        setHasClickedMascot(true);
+                        return;
+                      }
+
+                      setIsChatOpen(true);
+                      setHasClickedMascot(true);
+                    }}
+                    className={cn(
+                      "group relative w-48 h-48 rounded-2xl flex items-center justify-center overflow-visible transition-all border",
+                      isInteractionLocked
+                        ? "border-emerald-400 bg-emerald-50/60 ring-4 ring-emerald-300/60 ring-offset-2 shadow-lg shadow-emerald-200"
+                        : "bg-transparent border-transparent hover:border-emerald-200 hover:bg-emerald-50/70",
+                    )}
+                    type="button"
+                  >
+                    <div className="scale-150">
+                      <PandaMascot state={displayAgentState} />
+                    </div>
+                    {!isChatOpen && !hasClickedMascot && (
+                      <div className="absolute top-4 right-4 w-10 h-10 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-12 group-hover:rotate-0 transition-transform">
+                        <MessageSquare className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                  </button>
 
               <AnimatePresence mode="wait">
-                {idleHelpCheckIn && (!isChatOpen || isMinimized) && (
+                {isInteractionLocked && (!isChatOpen || isMinimized) && (
+                  <motion.div
+                    key="completed-celebration"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="relative w-full max-w-[340px] bg-emerald-50 border-2 border-emerald-400 p-5 rounded-xl shadow-md text-center"
+                  >
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-emerald-50 border-t-2 border-l-2 border-emerald-400 rotate-45" />
+                    <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-500" />
+                    <p className="text-sm font-black text-emerald-900 leading-snug">
+                      Luar biasa! Semua test case lulus.
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-700/80">
+                      Challenge ini sudah berhasil kamu selesaikan.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsChatOpen(true);
+                        setHasClickedMascot(true);
+                      }}
+                      className="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-600"
+                    >
+                      Lihat Riwayat Chat
+                    </button>
+                  </motion.div>
+                )}
+                {!isInteractionLocked && idleHelpCheckIn && (!isChatOpen || isMinimized) && (
                   <motion.div
                     key="idle-help-check-in"
-                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                    className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-5 rounded-4xl shadow-xl shadow-emerald-900/10 max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="relative bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
                   >
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
                     <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
@@ -1828,48 +2380,208 @@ export function ChallengeWorkspace({
                     </div>
                   </motion.div>
                 )}
-                {!idleHelpCheckIn &&
+                {!isInteractionLocked &&
+                  !idleHelpCheckIn &&
                   agentMessage &&
                   (!isChatOpen || isMinimized) && (
                     <motion.div
                       key={agentMessage}
-                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -10, scale: 0.9 }}
-                      className="relative bg-[#f8faf9] border-2 border-emerald-400/30 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-900/10 text-center max-w-70"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="relative w-full max-w-[340px] bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm text-center"
                     >
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                      <p className="text-sm font-black text-emerald-950 leading-relaxed">
-                        {agentMessage}
-                      </p>
+                      <div
+                        className={cn(
+                          "relative",
+                          isAgentMessageLong && "max-h-36 overflow-hidden",
+                        )}
+                      >
+                        <p className="text-sm font-black text-emerald-950 leading-relaxed">
+                          {agentMessage}
+                        </p>
+                        {isAgentMessageLong && (
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f8faf9] to-transparent" />
+                        )}
+                      </div>
+                      {isAgentMessageLong && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsChatOpen(true);
+                            setHasClickedMascot(true);
+                          }}
+                          className="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-600"
+                        >
+                          Buka chat room untuk lihat lengkap
+                        </button>
+                      )}
                     </motion.div>
                   )}
               </AnimatePresence>
-            </div>
-          </div>
-        </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </main>
 
-      <ChatBot
-        messages={chatMessages}
-        onSendMessage={handleSendMessage}
-        username={username}
-        isTyping={isTyping}
-        disabled={isInteractionLocked}
-        isOpen={isChatOpen}
-        setIsOpen={setIsChatOpen}
-        isMinimized={isMinimized}
-        setIsMinimized={setIsMinimized}
-        isExpanded={isExpanded}
-        setIsExpanded={setIsExpanded}
-        agentState={agentState}
-        idleHelpCheckIn={idleHelpCheckIn}
-        idleHelpNoReasons={idleHelpNoReasons}
-        idleHelpYesReason={idleHelpYesReason}
-        onIdleHelpChoiceNo={handleIdleHelpChoiceNo}
-        onIdleHelpChoiceYes={handleIdleHelpChoiceYes}
-        isIdleHelpSubmitting={isIdleHelpSubmitting}
-      />
+      <AnimatePresence>
+        {isTutorialOpen && currentTutorialSlide && (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-emerald-950/45 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="challenge-tutorial-title"
+          >
+            <motion.div
+              // 1. Modal diperlebar ke max-w-4xl agar layout 50/50 tidak terlalu sempit
+              className="w-full max-w-4xl overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl shadow-emerald-950/20"
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 14, scale: 0.98 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/70 px-6 py-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                    <div className="origin-center scale-[0.38]">
+                      <PandaMascot state={currentTutorialSlide.mascotState} />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700">
+                      Tutorial Bamboost
+                    </p>
+                    <h2
+                      id="challenge-tutorial-title"
+                      className="truncate text-xl font-black tracking-tight text-emerald-950"
+                    >
+                      {currentTutorialSlide.title}
+                    </h2>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeTutorial}
+                  className="rounded-lg p-2 text-emerald-800 transition-colors hover:bg-white hover:text-emerald-950"
+                  title="Tutup tutorial"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* 2. Grid diubah ke 50/50 agar seimbang */}
+              <div className="grid gap-0 md:grid-cols-2">
+                {/* Padding kiri diperbesar jadi p-8 biar lebih 'breatheable' */}
+                <div className="flex min-h-[360px] flex-col justify-between p-8 md:min-h-[420px]">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={tutorialStep}
+                      initial={{ opacity: 0, x: 18 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -18 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-5"
+                    >
+                      <div className="inline-flex rounded-full bg-emerald-100 px-3.5 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-800">
+                        {tutorialStep + 1} dari {TUTORIAL_SLIDES.length}
+                      </div>
+                      {/* 3. Ukuran text diperbesar agar persis referensi SS */}
+                      <p className="text-lg font-bold leading-relaxed text-slate-700 md:text-xl">
+                        {currentTutorialSlide.description}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+
+                  <div className="space-y-6 pt-8">
+                    <div className="flex gap-2.5">
+                      {TUTORIAL_SLIDES.map((slide, index) => (
+                        <button
+                          key={slide.title}
+                          type="button"
+                          onClick={() => setTutorialStep(index)}
+                          className={cn(
+                            "h-2.5 rounded-full transition-all",
+                            index === tutorialStep
+                              ? "w-10 bg-emerald-700"
+                              : "w-2.5 bg-emerald-200 hover:bg-emerald-300",
+                          )}
+                          title={`Buka slide ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <button
+                        type="button"
+                        onClick={closeTutorial}
+                        className="px-2 text-sm font-bold text-emerald-800 transition-colors hover:text-emerald-950"
+                      >
+                        Lewati
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTutorialStep((step) => Math.max(step - 1, 0))
+                          }
+                          disabled={tutorialStep === 0}
+                          className="flex h-11 items-center gap-2.5 rounded-xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-900 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                          Kembali
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (tutorialStep === TUTORIAL_SLIDES.length - 1) {
+                              closeTutorial();
+                              return;
+                            }
+                            setTutorialStep((step) => step + 1);
+                          }}
+                          className="flex h-11 items-center gap-2.5 rounded-xl bg-emerald-700 px-5 text-sm font-black text-white transition-colors hover:bg-emerald-600"
+                        >
+                          {tutorialStep === TUTORIAL_SLIDES.length - 1
+                            ? "Mulai"
+                            : "Lanjut"}
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Panel background gambar diubah menjadi pale green yang lebih kalem */}
+                <div className="flex items-center justify-center border-t border-emerald-100 bg-[#f4f9f6] p-8 md:border-l md:border-t-0">
+                  {currentTutorialSlide.image ? (
+                    <div className="relative flex min-h-[260px] w-full items-center justify-center">
+                      {/* 5. FIX UTAMA: object-cover diganti object-contain agar screenshot tidak ter-crop */}
+                      <NextImage
+                        src={currentTutorialSlide.image}
+                        alt={currentTutorialSlide.title}
+                        className="max-h-[380px] w-full rounded-xl object-contain drop-shadow-md"
+                        placeholder="blur"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex min-h-[260px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-emerald-300 bg-white/80 p-5">
+                      <div className="origin-center scale-[1.8]">
+                        <PandaMascot state={currentTutorialSlide.mascotState} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <footer className="h-8 bg-emerald-950 text-emerald-100 px-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
         <div className="flex items-center gap-4">

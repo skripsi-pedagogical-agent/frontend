@@ -11,6 +11,7 @@ export interface AgentChatMessage {
   message: string;
   created_at: string;
   hint_type?: string;
+  trigger_source?: "EVENT" | null;
 }
 
 export interface IdleReason {
@@ -179,6 +180,10 @@ export async function getIdleReasons(): Promise<IdleReason[]> {
   const response = await authorizedFetch(buildApiUrl("api/idle-reasons/"), {
     method: "GET",
   });
+
+  if (response.status === 404) {
+    return [];
+  }
 
   if (!response.ok) {
     throw new Error(`Get idle reasons failed: ${response.status}`);
