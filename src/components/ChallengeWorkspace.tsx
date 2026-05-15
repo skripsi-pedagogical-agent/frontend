@@ -199,6 +199,7 @@ export function ChallengeWorkspace({
       error: string | null;
       time_used: number;
       memory_used: number;
+      stdout: string;
       input: string;
       is_hidden: boolean;
       test_case_id: string;
@@ -1013,6 +1014,7 @@ export function ChallengeWorkspace({
             error: result.error,
             time_used: result.time_used ?? 0,
             memory_used: result.memory_used ?? 0,
+            stdout: result.stdout ?? "",
             input: result.input ?? "",
             is_hidden: result.is_hidden ?? false,
             test_case_id: result.test_case_id,
@@ -1298,6 +1300,7 @@ export function ChallengeWorkspace({
         error: result.error,
         time_used: result.time_used ?? 0,
         memory_used: result.memory_used ?? 0,
+        stdout: result.stdout ?? "",
         input: result.input ?? "",
         is_hidden: result.is_hidden ?? false,
         test_case_id: result.test_case_id,
@@ -1565,6 +1568,17 @@ export function ChallengeWorkspace({
   const stuckHelpNoReasons = activeStuckReasons.filter(
     (reason) => reason.code !== yesCode,
   );
+
+  const judgeResults = lastResult?.judgeResults ?? [];
+  const publicJudgeResults = judgeResults
+    .map((result, index) => ({ result, index }))
+    .filter(({ result }) => !result.is_hidden);
+  const hiddenJudgeResults = judgeResults
+    .map((result, index) => ({ result, index }))
+    .filter(({ result }) => result.is_hidden);
+  const selectedJudgeResult = judgeResults[selectedResultTestCaseIndex];
+  const formatUsageValue = (value: number) =>
+    value.toFixed(4).replace(/\.?0+$/, "");
 
   const isConsoleResizing = resizeMode === "console";
   const currentTutorialSlide = TUTORIAL_SLIDES[tutorialStep];
@@ -2041,7 +2055,7 @@ export function ChallengeWorkspace({
                   ) : lastResult.judgeResults ? (
                     <div className="space-y-4">
                       {/* Overall Summary */}
-                      <div className="border-b border-emerald-900/20 pb-4">
+                      <div>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <span
@@ -2068,96 +2082,122 @@ export function ChallengeWorkspace({
                       </div>
 
                       {/* Test Cases List */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
-                          Test Case
-                        </label>
-                        <div className="space-y-2 max-h-50 overflow-y-auto custom-scrollbar">
-                          {lastResult.judgeResults.map((result, index) => (
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {publicJudgeResults.map(({ result, index }) => (
                             <button
                               key={result.test_case_id}
                               onClick={() =>
                                 setSelectedResultTestCaseIndex(index)
                               }
                               className={cn(
-                                "w-full p-3 rounded-lg text-left transition-all border",
+                                "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border",
                                 selectedResultTestCaseIndex === index
-                                  ? "bg-emerald-900/40 border-emerald-600/50"
-                                  : "bg-[#050d0a] border-emerald-900/20 hover:border-emerald-900/40",
+                                  ? result.status === "AC"
+                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-900/40"
+                                    : "bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30"
+                                  : result.status === "AC"
+                                    ? "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border-emerald-900/30"
+                                    : "bg-red-950/20 text-red-400 hover:bg-red-950/30 border-red-900/30",
                               )}
                               type="button"
                             >
-                              <div className="flex items-center gap-3">
-                                {result.status === "AC" ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                                ) : (
-                                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                                )}
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-xs font-bold text-emerald-100">
-                                      Case {index + 1}
-                                    </div>
-                                    {result.is_hidden && (
-                                      <span className="px-1.5 py-0.5 rounded-full border border-amber-700/40 bg-amber-900/20 text-[9px] font-black uppercase tracking-widest text-amber-300">
-                                        Hidden
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div
-                                    className={cn(
-                                      "text-[10px] font-semibold",
-                                      result.status === "AC"
-                                        ? "text-emerald-400"
-                                        : "text-red-400",
-                                    )}
-                                  >
-                                    {result.message}
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <div className="text-[9px] text-emerald-600 font-bold">
-                                    {result.time_used}ms
-                                  </div>
-                                  <div className="text-[9px] text-emerald-600">
-                                    {(result.memory_used * 1024).toFixed(1)}
-                                    KB
-                                  </div>
-                                </div>
-                              </div>
+                              Case {index + 1}
+                            </button>
+                          ))}
+
+                          {hiddenJudgeResults.length > 0 && (
+                            <div className="flex items-center gap-2">
+                              {publicJudgeResults.length > 0 && (
+                                <span className="text-emerald-800/70 font-bold">
+                                  |
+                                </span>
+                              )}
+                              <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">
+                                Hidden
+                              </span>
+                            </div>
+                          )}
+
+                          {hiddenJudgeResults.map(({ result, index }) => (
+                            <button
+                              key={result.test_case_id}
+                              onClick={() =>
+                                setSelectedResultTestCaseIndex(index)
+                              }
+                              className={cn(
+                                "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border",
+                                selectedResultTestCaseIndex === index
+                                  ? result.status === "AC"
+                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-900/40"
+                                    : "bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30"
+                                  : result.status === "AC"
+                                    ? "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border-emerald-900/30"
+                                    : "bg-red-950/20 text-red-400 hover:bg-red-950/30 border-red-900/30",
+                              )}
+                              type="button"
+                            >
+                              Case {index + 1}
                             </button>
                           ))}
                         </div>
                       </div>
 
                       {/* Selected Test Case Details */}
-                      {lastResult.judgeResults[selectedResultTestCaseIndex] && (
-                        <div className="border-t border-emerald-900/20 pt-4 space-y-3">
+                      {selectedJudgeResult && (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+                            <span
+                              className={cn(
+                                selectedJudgeResult.status === "AC"
+                                  ? "text-emerald-400"
+                                  : "text-red-400",
+                              )}
+                            >
+                              {selectedJudgeResult.message}
+                            </span>
+                            <span className="text-emerald-800/70">|</span>
+                            <span>
+                              {formatUsageValue(selectedJudgeResult.time_used)}
+                              ms
+                            </span>
+                            <span className="text-emerald-800/70">|</span>
+                            <span>
+                              {formatUsageValue(
+                                selectedJudgeResult.memory_used * 1024,
+                              )}
+                              KB
+                            </span>
+                          </div>
+                          {selectedJudgeResult.stdout && (
+                            <div>
+                              <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                                Stdout
+                              </label>
+                              <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
+                                {selectedJudgeResult.stdout}
+                              </div>
+                            </div>
+                          )}
                           <div className="gap-3">
                             <div>
                               <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
                                 Input
                               </label>
                               <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
-                                {lastResult.judgeResults[
-                                  selectedResultTestCaseIndex
-                                ].input || "Tidak ada input"}
+                                {selectedJudgeResult.input ||
+                                  "Tidak ada input"}
                               </div>
                             </div>
                           </div>
 
-                          {lastResult.judgeResults[selectedResultTestCaseIndex]
-                            .error ? (
+                          {selectedJudgeResult.error ? (
                             <div>
                               <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
                                 Kesalahan
                               </label>
                               <div className="bg-red-950/20 border border-red-900 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
-                                {
-                                  lastResult.judgeResults[
-                                    selectedResultTestCaseIndex
-                                  ].error
-                                }
+                                {selectedJudgeResult.error}
                               </div>
                             </div>
                           ) : (
@@ -2169,16 +2209,12 @@ export function ChallengeWorkspace({
                                 <div
                                   className={cn(
                                     "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar",
-                                    lastResult.judgeResults[
-                                      selectedResultTestCaseIndex
-                                    ].status === "AC"
+                                    selectedJudgeResult.status === "AC"
                                       ? "border-emerald-900 text-emerald-100"
                                       : "border-red-900/50 text-red-100 bg-red-950/10",
                                   )}
                                 >
-                                  {lastResult.judgeResults[
-                                    selectedResultTestCaseIndex
-                                  ].output || "No output"}
+                                  {selectedJudgeResult.output || "No output"}
                                 </div>
                               </div>
                               <div>
@@ -2186,9 +2222,8 @@ export function ChallengeWorkspace({
                                   Output yang Diharapkan
                                 </label>
                                 <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
-                                  {lastResult.judgeResults[
-                                    selectedResultTestCaseIndex
-                                  ].expected || "No expected output"}
+                                  {selectedJudgeResult.expected ||
+                                    "No expected output"}
                                 </div>
                               </div>
                             </div>
