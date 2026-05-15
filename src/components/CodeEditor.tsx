@@ -89,7 +89,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
   return (
     <div
-      className="w-full h-full rounded-xl overflow-hidden border border-emerald-100 shadow-sm bg-[#1e1e1e]"
+      className="w-full h-full overflow-hidden shadow-sm bg-[#1e1e1e]"
       style={{ contain: "strict" }}
     >
       <Editor

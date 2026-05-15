@@ -11,6 +11,9 @@ export interface EditorSession {
   problem_id: string;
   code: string;
   status_id: EditorSessionStatusId;
+  started_at: string | null;
+  first_accepted_at: string | null;
+  time_taken_seconds: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,8 +100,6 @@ export async function getLatestEditorSession(
     },
   );
 
-  console.log("Fetch editor session response:", response);
-
   if (!response.ok) {
     throw new Error(`Get editor session failed: ${response.status}`);
   }
@@ -122,4 +123,37 @@ export async function upsertEditorSession(
   }
 
   return (await response.json()) as EditorSession;
+}
+
+export async function startProblem(
+  userId: string,
+  problemId: string,
+): Promise<void> {
+  const response = await authorizedFetch(buildApiUrl("api/start-problem/"), {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId, problem_id: problemId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Start problem failed: ${response.status}`);
+  }
+}
+
+export async function saveTimeTaken(
+  problemId: string,
+  timeTakenSeconds: number,
+  options?: { keepalive?: boolean },
+): Promise<void> {
+  const response = await authorizedFetch(buildApiUrl("api/time-taken/"), {
+    method: "PUT",
+    body: JSON.stringify({
+      problem_id: problemId,
+      time_taken_seconds: timeTakenSeconds,
+    }),
+    keepalive: options?.keepalive,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Save time taken failed: ${response.status}`);
+  }
 }

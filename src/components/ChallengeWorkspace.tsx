@@ -50,6 +50,8 @@ import {
   getLatestEditorSession,
   type EditorSessionStatusId,
   upsertEditorSession,
+  startProblem,
+  saveTimeTaken,
 } from "@/src/services/editorSessionService";
 import { logTelemetry } from "@/src/services/telemetryService";
 // @ts-ignore
@@ -73,7 +75,6 @@ type AgentState =
 type ResizeMode = "console" | "problem" | "assistant" | null;
 
 const TUTORIAL_STORAGE_PREFIX = "bamboost:challenge-tutorial:v1";
-const WORK_SESSION_STORAGE_PREFIX = "bamboost:challenge-work-session:v1";
 
 const TUTORIAL_SLIDES = [
   {
@@ -183,9 +184,9 @@ export function ChallengeWorkspace({
       expectedOutput: "No test case available.",
     };
 
-  const [consoleTab, setConsoleTab] = useState<"testcase" | "result" | "console">(
-    "testcase",
-  );
+  const [consoleTab, setConsoleTab] = useState<
+    "testcase" | "result" | "console"
+  >("testcase");
   const [lastResult, setLastResult] = useState<{
     isCorrect: boolean;
     output: string[];
@@ -258,9 +259,10 @@ export function ChallengeWorkspace({
   const lastIdleTriggerTimeRef = useRef(0);
   const lastErrorTriggerCountRef = useRef(0);
   const hasGreetedRef = useRef(false);
+  const timeTakenRef = useRef(0);
+  const isWorkStartedRef = useRef(false);
   const currentUserId = getStoredAuthUser()?.id ?? "anonymous";
   const tutorialStorageKey = `${TUTORIAL_STORAGE_PREFIX}:${currentUserId}:${problem.id}`;
-  const workSessionStorageKey = `${WORK_SESSION_STORAGE_PREFIX}:${currentUserId}:${problem.id}`;
 
   const isBackendProblem =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -317,30 +319,6 @@ export function ChallengeWorkspace({
   }, [code]);
 
   useEffect(() => {
-    latestStatusIdRef.current = lastResult?.status === "Accepted" ? 2 : 1;
-  }, [lastResult]);
-
-  useEffect(() => {
-    let storedWorkStarted = false;
-    let storedTimeTaken = 0;
-
-    try {
-      const storedSession = window.localStorage.getItem(workSessionStorageKey);
-
-      if (storedSession) {
-        const parsedSession = JSON.parse(storedSession) as {
-          started?: boolean;
-          timeTaken?: number;
-        };
-
-        storedWorkStarted = Boolean(parsedSession.started);
-        storedTimeTaken = Math.max(0, Number(parsedSession.timeTaken) || 0);
-      }
-    } catch {
-      storedWorkStarted = false;
-      storedTimeTaken = 0;
-    }
-
     setCode(problem.starterCode);
     setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
@@ -349,12 +327,12 @@ export function ChallengeWorkspace({
     setSelectedResultTestCaseIndex(0);
     setConsoleTab("testcase");
     setAgentMessage(null);
-    setAgentState(storedWorkStarted ? "idle" : "sleeping");
+    setAgentState("sleeping");
     setChatMessages([]);
     setSubmitIdleTime(0);
-    setTimeTaken(storedTimeTaken);
+    setTimeTaken(0);
     setShowTimeTaken(true);
-    setIsWorkStarted(storedWorkStarted);
+    setIsWorkStarted(false);
     setHelpCheckInType(null);
     setErrorCount(0);
     setDeletionCount(0);
@@ -363,7 +341,9 @@ export function ChallengeWorkspace({
     setIsInteractionLocked(false);
     lastIdleTriggerTimeRef.current = 0;
     lastErrorTriggerCountRef.current = 0;
-    hasGreetedRef.current = false; // Reset greeting status untuk problem baru
+    hasGreetedRef.current = false;
+    timeTakenRef.current = 0;
+    isWorkStartedRef.current = false;
     lastCodeLength.current = problem.starterCode.length;
     hasUserTypedRef.current = false;
     lastSavedSignatureRef.current = null;
@@ -372,13 +352,15 @@ export function ChallengeWorkspace({
       clearTimeout(saveDebounceTimerRef.current);
       saveDebounceTimerRef.current = null;
     }
-  }, [problem, workSessionStorageKey]);
+  }, [problem]);
 
   useEffect(() => {
     setTutorialStep(0);
 
     try {
-      setIsTutorialOpen(window.localStorage.getItem(tutorialStorageKey) !== "seen");
+      setIsTutorialOpen(
+        window.localStorage.getItem(tutorialStorageKey) !== "seen",
+      );
     } catch {
       setIsTutorialOpen(true);
     }
@@ -410,10 +392,14 @@ export function ChallengeWorkspace({
         lastSavedSignatureRef.current = `${session.status_id}:${session.code}`;
         latestStatusIdRef.current = session.status_id;
         setIsInteractionLocked(session.status_id === 2);
-        if (session.status_id === 2) {
-          setIsWorkStarted(true);
-          setAgentState("idle");
-        }
+
+        const initialTimeTaken = Math.max(0, session.time_taken_seconds ?? 0);
+        setTimeTaken(initialTimeTaken);
+        timeTakenRef.current = initialTimeTaken;
+
+        setIsWorkStarted(true);
+        isWorkStartedRef.current = true;
+        setAgentState("idle");
 
         if (!hasUserTypedRef.current && session.code) {
           setCode(session.code);
@@ -521,6 +507,12 @@ export function ChallengeWorkspace({
         keepalive: true,
         force: true,
       });
+
+      if (isWorkStartedRef.current) {
+        void saveTimeTaken(problem.id, timeTakenRef.current, {
+          keepalive: true,
+        });
+      }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -532,6 +524,7 @@ export function ChallengeWorkspace({
     isBackendProblem,
     isEditorSessionLoaded,
     isInteractionLocked,
+    problem.id,
     saveEditorSession,
   ]);
 
@@ -623,26 +616,14 @@ export function ChallengeWorkspace({
         setSubmitIdleTime((prev) => prev + 1);
         setTimeTaken((prev) => {
           const nextTimeTaken = prev + 1;
-
-          try {
-            window.localStorage.setItem(
-              workSessionStorageKey,
-              JSON.stringify({
-                started: true,
-                timeTaken: nextTimeTaken,
-              }),
-            );
-          } catch {
-            // Time can continue in memory if localStorage is unavailable.
-          }
-
+          timeTakenRef.current = nextTimeTaken;
           return nextTimeTaken;
         });
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isInteractionLocked, isWorkStarted, workSessionStorageKey]);
+  }, [isInteractionLocked, isWorkStarted]);
 
   // 1. Effect untuk memunculkan pesan saat idle mencapai 60 detik
   useEffect(() => {
@@ -932,7 +913,8 @@ export function ChallengeWorkspace({
   };
 
   const runPlain = () => {
-    if (!isWorkStarted || isInteractionLocked || isRunning || isRunningPlain) return;
+    if (!isWorkStarted || isInteractionLocked || isRunning || isRunningPlain)
+      return;
 
     setConsoleOutput([]);
     setConsoleTab("console");
@@ -952,7 +934,10 @@ export function ChallengeWorkspace({
       },
       read: (x: string) => {
         // @ts-ignore
-        if (Sk.builtinFiles === undefined || Sk.builtinFiles.files[x] === undefined) {
+        if (
+          Sk.builtinFiles === undefined ||
+          Sk.builtinFiles.files[x] === undefined
+        ) {
           throw new Error(`File not found: '${x}'`);
         }
         // @ts-ignore
@@ -970,7 +955,9 @@ export function ChallengeWorkspace({
     runPromise.then(
       () => {
         if (currentLine) outputBuffer.push(currentLine);
-        setConsoleOutput(outputBuffer.length > 0 ? outputBuffer : ["(tanpa output)"]);
+        setConsoleOutput(
+          outputBuffer.length > 0 ? outputBuffer : ["(tanpa output)"],
+        );
         setIsRunningPlain(false);
       },
       (err: unknown) => {
@@ -1348,6 +1335,8 @@ export function ChallengeWorkspace({
           force: true,
         });
 
+        void saveTimeTaken(problem.id, timeTakenRef.current);
+
         setIsInteractionLocked(true);
         latestStatusIdRef.current = 2;
         setAgentState("happy");
@@ -1487,11 +1476,21 @@ export function ChallengeWorkspace({
         if (!isInteractionLocked) {
           await saveEditorSession(codeRef.current, { force: true });
         }
+
+        if (isWorkStartedRef.current && isBackendProblem) {
+          await saveTimeTaken(problem.id, timeTakenRef.current);
+        }
       } finally {
         onBack();
       }
     })();
-  }, [isInteractionLocked, onBack, saveEditorSession]);
+  }, [
+    isBackendProblem,
+    isInteractionLocked,
+    onBack,
+    problem.id,
+    saveEditorSession,
+  ]);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1522,7 +1521,10 @@ export function ChallengeWorkspace({
       if (resizeMode === "problem") {
         const maxProblemWidth = Math.max(
           280,
-          Math.min(window.innerWidth * 0.45, window.innerWidth - assistantPanelWidth - 420),
+          Math.min(
+            window.innerWidth * 0.45,
+            window.innerWidth - assistantPanelWidth - 420,
+          ),
         );
         setProblemPanelWidth(
           Math.min(Math.max(e.clientX, 280), maxProblemWidth),
@@ -1533,7 +1535,10 @@ export function ChallengeWorkspace({
         const currentProblemWidth = isProblemPanelOpen ? problemPanelWidth : 48;
         const maxAssistantWidth = Math.max(
           320,
-          Math.min(window.innerWidth * 0.45, window.innerWidth - currentProblemWidth - 420),
+          Math.min(
+            window.innerWidth * 0.45,
+            window.innerWidth - currentProblemWidth - 420,
+          ),
         );
         setAssistantPanelWidth(
           Math.min(
@@ -1589,23 +1594,18 @@ export function ChallengeWorkspace({
 
   const startWorking = useCallback(() => {
     setIsWorkStarted(true);
+    isWorkStartedRef.current = true;
     setAgentState("idle");
     setAgentMessage(null);
     setSubmitIdleTime(0);
     lastIdleTriggerTimeRef.current = 0;
 
-    try {
-      window.localStorage.setItem(
-        workSessionStorageKey,
-        JSON.stringify({
-          started: true,
-          timeTaken,
-        }),
-      );
-    } catch {
-      // The session still starts if localStorage is unavailable.
+    if (isBackendProblem && currentUserId !== "anonymous") {
+      void startProblem(currentUserId, problem.id).catch((err) => {
+        console.error("Failed to start problem:", err);
+      });
     }
-  }, [timeTaken, workSessionStorageKey]);
+  }, [currentUserId, isBackendProblem, problem.id]);
 
   const closeTutorial = useCallback(() => {
     try {
@@ -1724,82 +1724,82 @@ export function ChallengeWorkspace({
               className="flex flex-col bg-[#e8edea] overflow-hidden shrink-0"
             >
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="p-6 space-y-8">
-            <section className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-emerald-900 text-white rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <h2 className="min-w-0 flex-1 text-xl font-black tracking-tight text-emerald-950">
-                  {problem.title}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setIsProblemPanelOpen(false)}
-                  className="shrink-0 rounded-lg border border-emerald-400/50 bg-white/80 p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100"
-                  title="Tutup panel soal"
-                >
-                  <PanelLeftClose className="h-4 w-4" />
-                </button>
-              </div>
+                <div className="p-6 space-y-8">
+                  <section className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-emerald-900 text-white rounded-lg flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <h2 className="min-w-0 flex-1 text-xl font-black tracking-tight text-emerald-950">
+                        {problem.title}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setIsProblemPanelOpen(false)}
+                        className="shrink-0 rounded-lg border border-emerald-400/50 bg-white/80 p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100"
+                        title="Tutup panel soal"
+                      >
+                        <PanelLeftClose className="h-4 w-4" />
+                      </button>
+                    </div>
 
-              <div className="flex gap-2">
-                <span
-                  className={cn(
-                    "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
-                    problem.difficulty === "Easy"
-                      ? "bg-emerald-300 text-emerald-950"
-                      : problem.difficulty === "Medium"
-                        ? "bg-amber-300 text-amber-950"
-                        : "bg-red-300 text-red-950",
-                  )}
-                >
-                  {problem.difficulty}
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-slate-300 text-slate-900 text-[10px] font-black uppercase tracking-widest">
-                  {problem.category}
-                </span>
-              </div>
+                    <div className="flex gap-2">
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
+                          problem.difficulty === "Easy"
+                            ? "bg-emerald-300 text-emerald-950"
+                            : problem.difficulty === "Medium"
+                              ? "bg-amber-300 text-amber-950"
+                              : "bg-red-300 text-red-950",
+                        )}
+                      >
+                        {problem.difficulty}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-300 text-slate-900 text-[10px] font-black uppercase tracking-widest">
+                        {problem.category}
+                      </span>
+                    </div>
 
-              <div className="prose prose-emerald max-w-none">
-                <p className="text-emerald-950 font-bold leading-relaxed whitespace-pre-wrap text-sm">
-                  {problem.description}
-                </p>
-              </div>
-            </section>
-
-            <section className="space-y-4 pt-8 border-t border-emerald-400/50">
-              <h3 className="text-xs font-black uppercase tracking-widest text-emerald-700">
-                Contoh
-              </h3>
-              {hasTestCases ? (
-                problem.testCases.map((tc, index) => (
-                  <div key={tc.id} className="space-y-2">
-                    <p className="text-[11px] font-black text-emerald-900">
-                      Contoh {index + 1}:
-                    </p>
-                    <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
-                      <p className="text-[10px] font-mono font-black">
-                        <span className="text-emerald-700">Input:</span>{" "}
-                        {tc.input}
-                      </p>
-                      <p className="text-[10px] font-mono font-black">
-                        <span className="text-emerald-700">Output:</span>{" "}
-                        {tc.expectedOutput}
+                    <div className="prose prose-emerald max-w-none">
+                      <p className="text-emerald-950 font-bold leading-relaxed whitespace-pre-wrap text-sm">
+                        {problem.description}
                       </p>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
-                  <p className="text-[11px] font-bold text-emerald-800">
-                    Tidak ada contoh test case yang disediakan untuk tantangan
-                    ini.
-                  </p>
+                  </section>
+
+                  <section className="space-y-4 pt-8 border-t border-emerald-400/50">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-emerald-700">
+                      Contoh
+                    </h3>
+                    {hasTestCases ? (
+                      problem.testCases.map((tc, index) => (
+                        <div key={tc.id} className="space-y-2">
+                          <p className="text-[11px] font-black text-emerald-900">
+                            Contoh {index + 1}:
+                          </p>
+                          <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
+                            <p className="text-[10px] font-mono font-black">
+                              <span className="text-emerald-700">Input:</span>{" "}
+                              {tc.input}
+                            </p>
+                            <p className="text-[10px] font-mono font-black">
+                              <span className="text-emerald-700">Output:</span>{" "}
+                              {tc.expectedOutput}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
+                        <p className="text-[11px] font-bold text-emerald-800">
+                          Tidak ada contoh test case yang disediakan untuk
+                          tantangan ini.
+                        </p>
+                      </div>
+                    )}
+                  </section>
                 </div>
-              )}
-            </section>
-          </div>
               </div>
             </motion.aside>
           ) : (
@@ -1847,7 +1847,12 @@ export function ChallengeWorkspace({
             <div className="flex items-center gap-2">
               <button
                 onClick={runPlain}
-                disabled={!isWorkStarted || isRunning || isRunningPlain || isInteractionLocked}
+                disabled={
+                  !isWorkStarted ||
+                  isRunning ||
+                  isRunningPlain ||
+                  isInteractionLocked
+                }
                 className="flex items-center gap-2 px-4 py-1.5 bg-[#2d2d2d] text-[#cccccc] border border-[#3d3d3d] rounded-lg text-[11px] font-bold hover:bg-[#3d3d3d] transition-all disabled:opacity-40"
                 type="button"
               >
@@ -1856,7 +1861,12 @@ export function ChallengeWorkspace({
               </button>
               <button
                 onClick={() => runCode(selectedTestCase.input)}
-                disabled={!isWorkStarted || isRunning || isRunningPlain || isInteractionLocked}
+                disabled={
+                  !isWorkStarted ||
+                  isRunning ||
+                  isRunningPlain ||
+                  isInteractionLocked
+                }
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
                 type="button"
               >
@@ -1990,7 +2000,11 @@ export function ChallengeWorkspace({
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
                       <TerminalIcon className="w-8 h-8 text-emerald-800" />
                       <p className="text-xs font-bold text-emerald-700">
-                        Tekan <span className="text-[#cccccc] bg-[#2d2d2d] px-1.5 py-0.5 rounded font-mono">Run</span> untuk melihat output print()
+                        Tekan{" "}
+                        <span className="text-[#cccccc] bg-[#2d2d2d] px-1.5 py-0.5 rounded font-mono">
+                          Run
+                        </span>{" "}
+                        untuk melihat output print()
                       </p>
                     </div>
                   ) : (
@@ -2185,8 +2199,7 @@ export function ChallengeWorkspace({
                                 Input
                               </label>
                               <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
-                                {selectedJudgeResult.input ||
-                                  "Tidak ada input"}
+                                {selectedJudgeResult.input || "Tidak ada input"}
                               </div>
                             </div>
                           </div>
@@ -2387,106 +2400,23 @@ export function ChallengeWorkspace({
                     )}
                   </button>
 
-              <AnimatePresence mode="wait">
-                {isInteractionLocked && (!isChatOpen || isMinimized) && (
-                  <motion.div
-                    key="completed-celebration"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="relative w-full max-w-[340px] bg-emerald-50 border-2 border-emerald-400 p-5 rounded-xl shadow-md text-center"
-                  >
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-emerald-50 border-t-2 border-l-2 border-emerald-400 rotate-45" />
-                    <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-500" />
-                    <p className="text-sm font-black text-emerald-900 leading-snug">
-                      Luar biasa! Semua test case lulus.
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-emerald-700/80">
-                      Challenge ini sudah berhasil kamu selesaikan.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsChatOpen(true);
-                        setHasClickedMascot(true);
-                      }}
-                      className="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-600"
-                    >
-                      Lihat Riwayat Chat
-                    </button>
-                  </motion.div>
-                )}
-                {!isInteractionLocked &&
-                  helpCheckInType !== null &&
-                  (!isChatOpen || isMinimized) && (
-                  <motion.div
-                    key="idle-help-check-in"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="relative bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
-                  >
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                    <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
-                      {helpCheckInType === "error"
-                        ? "Kamu kelihatannya kesulitan memperbaiki error. Butuh bantuan?"
-                        : "Sudah cukup lama tanpa submit. Butuh bantuan?"}
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {stuckHelpNoReasons.map((reason) => (
-                        <button
-                          key={reason.id}
-                          type="button"
-                          disabled={isIdleHelpSubmitting}
-                          onClick={() => void handleStuckHelpChoiceNo(reason)}
-                          className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-                        >
-                          {reason.description}
-                        </button>
-                      ))}
-                      {stuckHelpYesReason && (
-                        <button
-                          type="button"
-                          disabled={isIdleHelpSubmitting}
-                          onClick={() =>
-                            void handleStuckHelpChoiceYes(stuckHelpYesReason)
-                          }
-                          className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                        >
-                          {isIdleHelpSubmitting
-                            ? "Memuat…"
-                            : stuckHelpYesReason.description}
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-                {!isInteractionLocked &&
-                  helpCheckInType === null &&
-                  agentMessage &&
-                  (!isChatOpen || isMinimized) && (
-                    <motion.div
-                      key={agentMessage}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="relative w-full max-w-[340px] bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm text-center"
-                    >
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                      <div
-                        className={cn(
-                          "relative",
-                          isAgentMessageLong && "max-h-36 overflow-hidden",
-                        )}
+                  <AnimatePresence mode="wait">
+                    {isInteractionLocked && (!isChatOpen || isMinimized) && (
+                      <motion.div
+                        key="completed-celebration"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="relative w-full max-w-[340px] bg-emerald-50 border-2 border-emerald-400 p-5 rounded-xl shadow-md text-center"
                       >
-                        <p className="text-sm font-black text-emerald-950 leading-relaxed">
-                          {agentMessage}
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-emerald-50 border-t-2 border-l-2 border-emerald-400 rotate-45" />
+                        <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-500" />
+                        <p className="text-sm font-black text-emerald-900 leading-snug">
+                          Luar biasa! Semua test case lulus.
                         </p>
-                        {isAgentMessageLong && (
-                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f8faf9] to-transparent" />
-                        )}
-                      </div>
-                      {isAgentMessageLong && (
+                        <p className="mt-1 text-xs font-semibold text-emerald-700/80">
+                          Challenge ini sudah berhasil kamu selesaikan.
+                        </p>
                         <button
                           type="button"
                           onClick={() => {
@@ -2495,12 +2425,99 @@ export function ChallengeWorkspace({
                           }}
                           className="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-600"
                         >
-                          Buka chat room untuk lihat lengkap
+                          Lihat Riwayat Chat
                         </button>
+                      </motion.div>
+                    )}
+                    {!isInteractionLocked &&
+                      helpCheckInType !== null &&
+                      (!isChatOpen || isMinimized) && (
+                        <motion.div
+                          key="idle-help-check-in"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          className="relative bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
+                        >
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                          <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
+                            {helpCheckInType === "error"
+                              ? "Kamu kelihatannya kesulitan memperbaiki error. Butuh bantuan?"
+                              : "Sudah cukup lama tanpa submit. Butuh bantuan?"}
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            {stuckHelpNoReasons.map((reason) => (
+                              <button
+                                key={reason.id}
+                                type="button"
+                                disabled={isIdleHelpSubmitting}
+                                onClick={() =>
+                                  void handleStuckHelpChoiceNo(reason)
+                                }
+                                className="w-full text-left text-xs font-bold text-emerald-950 bg-white border border-emerald-300/80 rounded-xl px-3 py-2.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                              >
+                                {reason.description}
+                              </button>
+                            ))}
+                            {stuckHelpYesReason && (
+                              <button
+                                type="button"
+                                disabled={isIdleHelpSubmitting}
+                                onClick={() =>
+                                  void handleStuckHelpChoiceYes(
+                                    stuckHelpYesReason,
+                                  )
+                                }
+                                className="w-full text-left text-xs font-black text-white bg-emerald-700 border border-emerald-800 rounded-xl px-3 py-2.5 hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                              >
+                                {isIdleHelpSubmitting
+                                  ? "Memuat…"
+                                  : stuckHelpYesReason.description}
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
                       )}
-                    </motion.div>
-                  )}
-              </AnimatePresence>
+                    {!isInteractionLocked &&
+                      helpCheckInType === null &&
+                      agentMessage &&
+                      (!isChatOpen || isMinimized) && (
+                        <motion.div
+                          key={agentMessage}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          className="relative w-full max-w-[340px] bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm text-center"
+                        >
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                          <div
+                            className={cn(
+                              "relative",
+                              isAgentMessageLong && "max-h-36 overflow-hidden",
+                            )}
+                          >
+                            <p className="text-sm font-black text-emerald-950 leading-relaxed">
+                              {agentMessage}
+                            </p>
+                            {isAgentMessageLong && (
+                              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f8faf9] to-transparent" />
+                            )}
+                          </div>
+                          {isAgentMessageLong && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsChatOpen(true);
+                                setHasClickedMascot(true);
+                              }}
+                              className="mt-4 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-600"
+                            >
+                              Buka chat room untuk lihat lengkap
+                            </button>
+                          )}
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
                 </div>
               </motion.div>
             )}
