@@ -199,6 +199,7 @@ export function ChallengeWorkspace({
       error: string | null;
       time_used: number;
       memory_used: number;
+      stdout: string;
       input: string;
       is_hidden: boolean;
       test_case_id: string;
@@ -1013,6 +1014,7 @@ export function ChallengeWorkspace({
             error: result.error,
             time_used: result.time_used ?? 0,
             memory_used: result.memory_used ?? 0,
+            stdout: result.stdout ?? "",
             input: result.input ?? "",
             is_hidden: result.is_hidden ?? false,
             test_case_id: result.test_case_id,
@@ -1298,6 +1300,7 @@ export function ChallengeWorkspace({
         error: result.error,
         time_used: result.time_used ?? 0,
         memory_used: result.memory_used ?? 0,
+        stdout: result.stdout ?? "",
         input: result.input ?? "",
         is_hidden: result.is_hidden ?? false,
         test_case_id: result.test_case_id,
@@ -2166,6 +2169,16 @@ export function ChallengeWorkspace({
                               KB
                             </span>
                           </div>
+                          {selectedJudgeResult.stdout && (
+                            <div>
+                              <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                                Stdout
+                              </label>
+                              <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
+                                {selectedJudgeResult.stdout}
+                              </div>
+                            </div>
+                          )}
                           <div className="gap-3">
                             <div>
                               <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
