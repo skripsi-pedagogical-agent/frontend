@@ -53,6 +53,8 @@ export interface SubmissionJudgeResultItem {
   error: string | null;
   time_used: number | null;
   memory_used: number | null;
+  input: string | null;
+  is_hidden: boolean;
   test_case_id: string;
 }
 

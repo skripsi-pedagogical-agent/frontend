@@ -1,5 +1,13 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { Send, User, Sparkles, X, Expand, Shrink } from "lucide-react";
+import {
+  Send,
+  User,
+  Sparkles,
+  X,
+  Expand,
+  Shrink,
+  Zap,
+} from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -55,7 +63,7 @@ const MarkdownComponents: Components = {
           wordBreak: "break-word",
           borderRadius: "0.75rem",
           margin: "0.5rem 0",
-          fontSize: "0.85rem"
+          fontSize: "0.85rem",
         }}
         className="rounded-xl shadow-sm"
       >
@@ -66,7 +74,7 @@ const MarkdownComponents: Components = {
         {...props}
         className={cn(
           className,
-          "bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-mono text-xs whitespace-pre-wrap break-words",
+          "bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-mono text-xs whitespace-pre-wrap wrap-break-word",
         )}
       >
         {children}
@@ -88,7 +96,7 @@ export interface Message {
   proactive?: boolean;
 }
 
-export interface IdleHelpOption {
+export interface StuckHelpOption {
   id: string;
   description: string;
 }
@@ -103,12 +111,12 @@ interface ChatBotProps {
   setIsOpen: (open: boolean) => void;
   isMinimized: boolean;
   setIsMinimized: (minimized: boolean) => void;
-  idleHelpCheckIn: boolean;
-  idleHelpNoReasons: IdleHelpOption[];
-  idleHelpYesReason?: IdleHelpOption;
-  onIdleHelpChoiceNo: (reason: IdleHelpOption) => void;
-  onIdleHelpChoiceYes: (reason: IdleHelpOption) => void;
-  isIdleHelpSubmitting: boolean;
+  helpCheckInType: "idle" | "error" | null;
+  stuckHelpNoReasons: StuckHelpOption[];
+  stuckHelpYesReason?: StuckHelpOption;
+  onStuckHelpChoiceNo: (reason: StuckHelpOption) => void;
+  onStuckHelpChoiceYes: (reason: StuckHelpOption) => void;
+  isStuckHelpSubmitting: boolean;
   agentState:
     | "idle"
     | "thinking"
@@ -134,12 +142,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   setIsOpen,
   isMinimized,
   setIsMinimized,
-  idleHelpCheckIn,
-  idleHelpNoReasons,
-  idleHelpYesReason,
-  onIdleHelpChoiceNo,
-  onIdleHelpChoiceYes,
-  isIdleHelpSubmitting,
+  helpCheckInType,
+  stuckHelpNoReasons,
+  stuckHelpYesReason,
+  onStuckHelpChoiceNo,
+  onStuckHelpChoiceYes,
+  isStuckHelpSubmitting,
   agentState,
   embedded = false,
   isExpanded = false,
@@ -174,7 +182,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       setInput("");
       // Reset height after submit
       if (textareaRef.current) {
-         textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = "auto";
       }
     }
   };
@@ -182,11 +190,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   const lastMessagePreview = messages.length
     ? messages[messages.length - 1].content.replace(/\s+/g, " ").trim()
     : "";
-  
+
   // FIX: Trimming the message for minimized state
-  const previewLabel = lastMessagePreview.length > 50
-    ? `${lastMessagePreview.slice(0, 50)}...`
-    : lastMessagePreview;
+  const previewLabel =
+    lastMessagePreview.length > 50
+      ? `${lastMessagePreview.slice(0, 50)}...`
+      : lastMessagePreview;
 
   if (!isOpen && !embedded) return null;
 
@@ -283,19 +292,25 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 <div>
                   <h4 className="text-base font-bold text-slate-900 mb-2">
                     Aku BamBoost, siap membantu!
-                    </h4>
-                    <ul className="text-sm text-emerald-900 space-y-2 font-medium text-left bg-white p-4 rounded-lg border border-emerald-200 inline-block shadow-sm">
+                  </h4>
+                  <ul className="text-sm text-emerald-900 space-y-2 font-medium text-left bg-white p-4 rounded-lg border border-emerald-200 inline-block shadow-sm">
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">💡</span> 
-                      <span>"Bamboost, tolong kasih <b>hint</b> untuk logika ini?"</span>
+                      <span className="shrink-0">💡</span>
+                      <span>
+                        "Bamboost, tolong kasih <b>hint</b> untuk logika ini?"
+                      </span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">🧩</span> 
-                      <span>"Ada saran <b>approach (pendekatan)</b> lain nggak?"</span>
+                      <span className="shrink-0">🧩</span>
+                      <span>
+                        "Ada saran <b>approach (pendekatan)</b> lain nggak?"
+                      </span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="shrink-0">📝</span> 
-                      <span>"Bisa kasih <b>contoh snippet</b> yang mirip?"</span>
+                      <span className="shrink-0">📝</span>
+                      <span>
+                        "Bisa kasih <b>contoh snippet</b> yang mirip?"
+                      </span>
                     </li>
                   </ul>
                 </div>
@@ -333,30 +348,38 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 <div
                   className={cn(
                     "max-w-[85%] space-y-1",
-                    msg.role === "user" ? "items-end text-right" : "items-start text-left",
+                    msg.role === "user"
+                      ? "items-end text-right"
+                      : "items-start text-left",
                   )}
                 >
                   {/* Sender Name & Type Label */}
-                  <div className={cn(
-                    "flex items-center gap-2",
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  )}>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2",
+                      msg.role === "user" ? "justify-end" : "justify-start",
+                    )}
+                  >
                     <span className="text-[10px] font-bold tracking-wider text-emerald-800/70 uppercase">
                       {msg.role === "user" ? username : "BAMBOOST"}
                     </span>
-                    
-                  
-                    {msg.role === "assistant" && msg.proactive && (
+                    {msg.role === "assistant" && msg.proactive ? (
                       <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 border border-amber-300 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
-                        ⚡ Sigap
+                        <Zap className="h-3 w-3" />
+                        Sigap
                       </span>
-                    )}
+                    ) : msg.role === "assistant" &&
+                      msg.type !== "observational" ? (
+                      <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
+                        Balasan
+                      </span>
+                    ) : null}
                   </div>
 
                   {/* Bubble */}
                   <div
                     className={cn(
-                      "p-3 text-sm leading-relaxed break-words prose prose-sm max-w-none rounded-lg border",
+                      "p-3 text-sm leading-relaxed break-words prose prose-sm max-w-none rounded-lg border shadow-sm",
                       msg.role === "user"
                         ? "bg-emerald-700 text-white border-emerald-700 prose-invert"
                         : "bg-white text-slate-800 border-emerald-200 font-medium prose-emerald shadow-sm",
@@ -379,36 +402,37 @@ export const ChatBot: React.FC<ChatBotProps> = ({
               </div>
             ))}
 
-            {/* Proactive Idle Help Check-in */}
-            {idleHelpCheckIn && (
+            {/* Proactive Help Check-in */}
+            {helpCheckInType !== null && (
               <div className="space-y-4 pt-4 border-t border-emerald-200/50">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left relative overflow-hidden">
-                
                   <p className="text-sm font-bold text-slate-800 mb-5">
-                    Saya perhatikan kamu terdiam cukup lama. Ada yang bikin bingung?
+                    {helpCheckInType === "error"
+                      ? "Kelihatannya kamu kesulitan memperbaiki error. Ada yang bingung?"
+                      : "Saya perhatikan kamu terdiam cukup lama. Ada yang bikin bingung?"}
                   </p>
                   <div className="grid gap-2.5">
-                    {idleHelpNoReasons.map((reason) => (
+                    {stuckHelpNoReasons.map((reason) => (
                       <button
                         key={reason.id}
                         type="button"
-                        disabled={isIdleHelpSubmitting}
-                        onClick={() => onIdleHelpChoiceNo(reason)}
+                        disabled={isStuckHelpSubmitting}
+                        onClick={() => onStuckHelpChoiceNo(reason)}
                         className="w-full text-left text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-md px-4 py-3 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
                       >
                         {reason.description}
                       </button>
                     ))}
-                    {idleHelpYesReason && (
+                    {stuckHelpYesReason && (
                       <button
                         type="button"
-                        disabled={isIdleHelpSubmitting}
-                        onClick={() => onIdleHelpChoiceYes(idleHelpYesReason)}
+                        disabled={isStuckHelpSubmitting}
+                        onClick={() => onStuckHelpChoiceYes(stuckHelpYesReason)}
                         className="w-full text-left text-xs font-bold text-emerald-900 bg-emerald-100 border border-emerald-200 rounded-md px-4 py-3 hover:bg-emerald-200 transition-colors disabled:opacity-50 mt-2"
                       >
-                        {isIdleHelpSubmitting
+                        {isStuckHelpSubmitting
                           ? "Memuat hint..."
-                          : "Ya, beri saya hint logika."}
+                          : "Ya, beri saya hint."}
                       </button>
                     )}
                   </div>
@@ -447,19 +471,19 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleSubmit(e);
                   }
                 }}
                 placeholder={
                   disabled
-                    ? "Challenge selesai — riwayat chat (read only)."
+                    ? "Chat belum aktif."
                     : "Ketik pertanyaanmu..."
                 }
                 disabled={disabled}
                 className="flex-1 w-full min-h-[44px] overflow-y-auto resize-none bg-emerald-50/60 border border-emerald-200 rounded-md py-3 pl-4 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors placeholder:text-emerald-700/45 font-medium text-emerald-950 whitespace-pre-wrap break-words"
-                style={{ maxHeight: '120px' }}
+                style={{ maxHeight: "120px" }}
               />
               <button
                 type="submit"
