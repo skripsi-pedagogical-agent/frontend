@@ -16,7 +16,8 @@ interface PandaMascotProps {
     | "talking"
     | "confused"
     | "sad"
-    | "mad";
+    | "mad"
+    | "sleeping";
   message?: string;
 }
 
@@ -114,7 +115,7 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
             scale: state === "happy" ? [1, 1.1, 1] : 1,
           }}
           transition={{
-            duration: 3,
+            duration: state === "sleeping" ? 4 : 3,
             repeat: Infinity,
             ease: "easeInOut",
           }}
@@ -145,6 +146,11 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
               <>
                 <div className="absolute top-11 left-6 w-3 h-1 bg-emerald-900 rounded-full rotate-12" />
                 <div className="absolute top-11 right-6 w-3 h-1 bg-emerald-900 rounded-full -rotate-12" />
+              </>
+            ) : state === "sleeping" ? (
+              <>
+                <div className="absolute top-11 left-6 w-3 h-1.5 border-b-2 border-white rounded-full rotate-6" />
+                <div className="absolute top-11 right-6 w-3 h-1.5 border-b-2 border-white rounded-full -rotate-6" />
               </>
             ) : state === "confused" ? (
               <>
@@ -221,6 +227,35 @@ export const PandaMascot: React.FC<PandaMascotProps> = ({ state, message }) => {
                     transition={{ delay: i * 0.2, repeat: Infinity }}
                     className="w-2 h-2 bg-emerald-500 rounded-full shadow-sm"
                   />
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {state === "sleeping" && (
+              <motion.div
+                initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.9 }}
+                className="absolute -top-9 -right-6 flex items-end gap-1 text-emerald-700"
+              >
+                {["Z", "z", "z"].map((letter, index) => (
+                  <motion.span
+                    key={`${letter}-${index}`}
+                    animate={{ y: [0, -7, 0], opacity: [0.45, 1, 0.45] }}
+                    transition={{
+                      delay: index * 0.22,
+                      duration: 1.8,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                    className={cn(
+                      "font-black leading-none",
+                      index === 0 ? "text-lg" : "text-sm",
+                    )}
+                  >
+                    {letter}
+                  </motion.span>
                 ))}
               </motion.div>
             )}
