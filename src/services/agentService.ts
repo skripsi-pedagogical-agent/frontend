@@ -11,6 +11,7 @@ export interface AgentChatMessage {
   message: string;
   created_at: string;
   hint_type?: string;
+  trigger_source?: "EVENT" | null;
 }
 
 export interface StuckReason {
@@ -189,6 +190,10 @@ export async function getStuckReasons(
       method: "GET",
     },
   );
+
+  if (response.status === 404) {
+    return [];
+  }
 
   if (!response.ok) {
     throw new Error(`Get stuck reasons failed: ${response.status}`);

@@ -35,6 +35,16 @@ export interface RunTestCaseRequest {
   source_code: string;
 }
 
+export interface RunCodeRequest {
+  problem_id: string;
+  source_code: string;
+}
+
+export interface RunCodeResponse {
+  stdout: string;
+  stderr?: string;
+}
+
 export interface SubmissionJudgeResultItem {
   status: string;
   message: string;
@@ -160,6 +170,26 @@ export async function submitProblemToBackend(
     return data;
   } catch (error) {
     console.error("Error submitting problem to backend:", error);
+    throw error;
+  }
+}
+
+export async function runCodeOnBackend(
+  payload: RunCodeRequest,
+): Promise<RunCodeResponse> {
+  try {
+    const response = await authorizedFetch(`${BACKEND_BASE_URL}/api/run/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to run code: ${response.status}`);
+    }
+
+    return (await response.json()) as RunCodeResponse;
+  } catch (error) {
+    console.error("Error running code on backend:", error);
     throw error;
   }
 }
