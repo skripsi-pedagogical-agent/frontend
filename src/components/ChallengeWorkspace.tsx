@@ -19,7 +19,6 @@ import {
   Play,
   Timer,
   TimerOff,
-  Terminal as TerminalIcon,
   Upload,
   X,
 } from "lucide-react";
@@ -184,9 +183,9 @@ export function ChallengeWorkspace({
       expectedOutput: "No test case available.",
     };
 
-  const [consoleTab, setConsoleTab] = useState<
-    "testcase" | "result" | "console"
-  >("testcase");
+  const [consoleTab, setConsoleTab] = useState<"testcase" | "result">(
+    "testcase",
+  );
   const [lastResult, setLastResult] = useState<{
     isCorrect: boolean;
     output: string[];
@@ -218,9 +217,7 @@ export function ChallengeWorkspace({
 
   const [code, setCode] = useState(problem.starterCode);
   const [output, setOutput] = useState<string[]>([]);
-  const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [isRunningPlain, setIsRunningPlain] = useState(false);
   const [agentState, setAgentState] = useState<AgentState>("sleeping");
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
 
@@ -322,7 +319,6 @@ export function ChallengeWorkspace({
     setCode(problem.starterCode);
     setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
-    setConsoleOutput([]);
     setLastResult(null);
     setSelectedResultTestCaseIndex(0);
     setConsoleTab("testcase");
@@ -910,61 +906,6 @@ export function ChallengeWorkspace({
       setAgentState("idle");
       setAgentMessage(null);
     }
-  };
-
-  const runPlain = () => {
-    if (!isWorkStarted || isInteractionLocked || isRunning || isRunningPlain)
-      return;
-
-    setConsoleOutput([]);
-    setConsoleTab("console");
-
-    // Always run via Skulpt (client-side) — no backend endpoint needed for plain stdout
-    setIsRunningPlain(true);
-    const outputBuffer: string[] = [];
-    let currentLine = "";
-
-    // @ts-ignore
-    Sk.configure({
-      output: (text: string) => {
-        currentLine += text;
-        const parts = currentLine.split("\n");
-        currentLine = parts.pop() || "";
-        outputBuffer.push(...parts);
-      },
-      read: (x: string) => {
-        // @ts-ignore
-        if (
-          Sk.builtinFiles === undefined ||
-          Sk.builtinFiles.files[x] === undefined
-        ) {
-          throw new Error(`File not found: '${x}'`);
-        }
-        // @ts-ignore
-        return Sk.builtinFiles.files[x];
-      },
-      execLimit: 5000,
-    });
-
-    // @ts-ignore
-    const runPromise = Sk.misceval.asyncToPromise(() => {
-      // @ts-ignore
-      return Sk.importMainWithBody("<stdin>", false, code, true);
-    });
-
-    runPromise.then(
-      () => {
-        if (currentLine) outputBuffer.push(currentLine);
-        setConsoleOutput(
-          outputBuffer.length > 0 ? outputBuffer : ["(tanpa output)"],
-        );
-        setIsRunningPlain(false);
-      },
-      (err: unknown) => {
-        setConsoleOutput([`Error: ${String(err)}`]);
-        setIsRunningPlain(false);
-      },
-    );
   };
 
   const runCode = (
@@ -1846,27 +1787,8 @@ export function ChallengeWorkspace({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={runPlain}
-                disabled={
-                  !isWorkStarted ||
-                  isRunning ||
-                  isRunningPlain ||
-                  isInteractionLocked
-                }
-                className="flex items-center gap-2 px-4 py-1.5 bg-[#2d2d2d] text-[#cccccc] border border-[#3d3d3d] rounded-lg text-[11px] font-bold hover:bg-[#3d3d3d] transition-all disabled:opacity-40"
-                type="button"
-              >
-                <TerminalIcon className="w-3.5 h-3.5" />
-                {isRunningPlain ? "Menjalankan..." : "Run"}
-              </button>
-              <button
                 onClick={() => runCode(selectedTestCase.input)}
-                disabled={
-                  !isWorkStarted ||
-                  isRunning ||
-                  isRunningPlain ||
-                  isInteractionLocked
-                }
+                disabled={!isWorkStarted || isRunning || isInteractionLocked}
                 className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
                 type="button"
               >
@@ -1970,50 +1892,10 @@ export function ChallengeWorkspace({
                 <ListChecks className="w-3.5 h-3.5" />
                 Hasil Test
               </button>
-              <button
-                onClick={() => setConsoleTab("console")}
-                className={cn(
-                  "h-full px-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
-                  consoleTab === "console"
-                    ? "text-amber-400 border-amber-500"
-                    : "text-emerald-700 border-transparent hover:text-emerald-500",
-                )}
-                type="button"
-              >
-                <TerminalIcon className="w-3.5 h-3.5" />
-                Console
-                {isRunningPlain && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                )}
-              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {consoleTab === "console" ? (
-                <div className="h-full flex flex-col">
-                  {isRunningPlain ? (
-                    <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                      Menjalankan kode...
-                    </div>
-                  ) : consoleOutput.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
-                      <TerminalIcon className="w-8 h-8 text-emerald-800" />
-                      <p className="text-xs font-bold text-emerald-700">
-                        Tekan{" "}
-                        <span className="text-[#cccccc] bg-[#2d2d2d] px-1.5 py-0.5 rounded font-mono">
-                          Run
-                        </span>{" "}
-                        untuk melihat output print()
-                      </p>
-                    </div>
-                  ) : (
-                    <pre className="font-mono text-xs text-emerald-100 whitespace-pre-wrap break-words leading-relaxed">
-                      {consoleOutput.join("\n")}
-                    </pre>
-                  )}
-                </div>
-              ) : consoleTab === "testcase" ? (
+              {consoleTab === "testcase" ? (
                 <div className="space-y-4">
                   <div className="flex gap-2">
                     {problem.testCases.map((tc) => (
