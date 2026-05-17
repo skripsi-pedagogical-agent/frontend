@@ -1325,6 +1325,23 @@ export function ChallengeWorkspace({
       timestamp: new Date(),
     };
 
+    const ignoredStuckType = helpCheckInType;
+
+    if (ignoredStuckType !== null && latestSessionIdRef.current) {
+      void logTelemetry({
+        problem: problem.id,
+        action_type: "STUCK_REASON_IGNORED",
+        hint_type: "",
+        code_snapshot: codeRef.current,
+        metadata: {
+          ignored_at: ignoredStuckType,
+          stuck_type: ignoredStuckType,
+          next_action: "continue_chat",
+          user_message: content,
+        },
+      });
+    }
+
     if (latestSessionIdRef.current) {
       void logTelemetry({
         problem: problem.id,
@@ -1340,7 +1357,7 @@ export function ChallengeWorkspace({
     // Reset idle timer whenever user actively chats with the chatbot.
     setSubmitIdleTime(0);
     lastIdleTriggerTimeRef.current = 0;
-    if (helpCheckInType !== null) {
+    if (ignoredStuckType !== null) {
       setHelpCheckInType(null);
     }
 
