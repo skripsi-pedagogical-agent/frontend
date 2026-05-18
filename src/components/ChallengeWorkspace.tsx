@@ -2,15 +2,15 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  ChevronRight,
   ClipboardList,
   FlaskConical,
-  GripVertical,
   HelpCircle,
   ListChecks,
   MessageSquare,
@@ -1579,12 +1579,12 @@ export function ChallengeWorkspace({
   const displayAgentState = isWorkStarted ? agentState : "sleeping";
 
   return (
-    <div className="h-screen bg-[#a8b4af] flex flex-col font-sans text-emerald-950 overflow-hidden">
-      <header className="h-16 bg-[#f0f4f2] border-b border-emerald-500/30 px-6 flex items-center justify-between shadow-sm z-10 shrink-0">
+    <div className="h-screen bg-[#e8edea] flex flex-col font-sans text-emerald-950 overflow-hidden">
+      <header className="h-16 bg-white border-b border-emerald-200/70 px-6 flex items-center justify-between shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={handleBackClick}
-            className="p-2 hover:bg-emerald-300/50 rounded-xl transition-colors mr-2 text-emerald-900"
+            className="p-2 hover:bg-emerald-100 rounded-xl transition-colors mr-2 text-emerald-800"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -1596,8 +1596,8 @@ export function ChallengeWorkspace({
           <h1 className="text-xl font-black tracking-tight text-emerald-950">
             Bamboost!
           </h1>
-          <div className="ml-4 px-3 py-1 bg-emerald-300/60 rounded-full border border-emerald-400/50">
-            <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+          <div className="ml-4 px-3 py-1 bg-emerald-100 rounded-full border border-emerald-300/60">
+            <span className="text-xs font-black text-emerald-900 uppercase tracking-wider">
               Halo, {username}
             </span>
           </div>
@@ -1616,7 +1616,7 @@ export function ChallengeWorkspace({
             <div
               className={
                 showTimeTaken
-                  ? "flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-300/60 px-2.5 py-1.5 text-xs font-black text-emerald-950 shadow-sm"
+                  ? "flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-100 px-2.5 py-1.5 text-xs font-black text-emerald-950 shadow-sm"
                   : "flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-xs font-black text-slate-400"
               }
             >
@@ -1652,11 +1652,11 @@ export function ChallengeWorkspace({
               setTutorialStep(0);
               setIsTutorialOpen(true);
             }}
-            className="p-2 hover:bg-emerald-300/50 rounded-full transition-colors"
+            className="p-2 hover:bg-emerald-100 rounded-full transition-colors"
             type="button"
             title="Buka tutorial"
           >
-            <HelpCircle className="w-5 h-5 text-emerald-900" />
+            <HelpCircle className="w-5 h-5 text-emerald-700" />
           </button>
         </div>
       </header>
@@ -1679,7 +1679,7 @@ export function ChallengeWorkspace({
               animate={{ width: problemPanelWidth, opacity: 1 }}
               exit={{ width: 48, opacity: 0 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-              className="flex flex-col bg-[#e8edea] overflow-hidden shrink-0"
+              className="flex flex-col bg-white overflow-hidden shrink-0"
             >
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <div className="p-6 space-y-8">
@@ -1694,7 +1694,7 @@ export function ChallengeWorkspace({
                       <button
                         type="button"
                         onClick={() => setIsProblemPanelOpen(false)}
-                        className="shrink-0 rounded-lg border border-emerald-400/50 bg-white/80 p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100"
+                        className="shrink-0 rounded-lg border border-emerald-300/70 bg-white/80 p-1.5 text-emerald-700 transition-colors hover:bg-emerald-50"
                         title="Tutup panel soal"
                       >
                         <PanelLeftClose className="h-4 w-4" />
@@ -1706,51 +1706,51 @@ export function ChallengeWorkspace({
                         className={cn(
                           "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
                           problem.difficulty === "Easy"
-                            ? "bg-emerald-300 text-emerald-950"
+                            ? "bg-emerald-100 text-emerald-800"
                             : problem.difficulty === "Medium"
-                              ? "bg-amber-300 text-amber-950"
-                              : "bg-red-300 text-red-950",
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-red-100 text-red-800",
                         )}
                       >
                         {problem.difficulty}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-300 text-slate-900 text-[10px] font-black uppercase tracking-widest">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest">
                         {problem.category}
                       </span>
                     </div>
 
                     <div className="prose prose-emerald max-w-none">
-                      <p className="text-emerald-950 font-bold leading-relaxed whitespace-pre-wrap text-sm">
+                      <p className="text-emerald-900 font-bold leading-relaxed whitespace-pre-wrap text-sm">
                         {problem.description}
                       </p>
                     </div>
                   </section>
 
-                  <section className="space-y-4 pt-8 border-t border-emerald-400/50">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-emerald-700">
+                  <section className="space-y-4 pt-8 border-t border-emerald-200/60">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-emerald-600">
                       Contoh
                     </h3>
                     {hasTestCases ? (
                       problem.testCases.map((tc, index) => (
                         <div key={tc.id} className="space-y-2">
-                          <p className="text-[11px] font-black text-emerald-900">
+                          <p className="text-[11px] font-black text-emerald-700">
                             Contoh {index + 1}:
                           </p>
-                          <div className="bg-white/90 rounded-xl p-3 space-y-2 border border-emerald-400/50 shadow-sm">
-                            <p className="text-[10px] font-mono font-black">
-                              <span className="text-emerald-700">Input:</span>{" "}
+                          <div className="bg-emerald-50 rounded-xl p-3 space-y-2 border border-emerald-200/70 shadow-sm">
+                            <p className="text-[10px] font-mono font-black text-emerald-900">
+                              <span className="text-emerald-600">Input:</span>{" "}
                               {tc.input}
                             </p>
-                            <p className="text-[10px] font-mono font-black">
-                              <span className="text-emerald-700">Output:</span>{" "}
+                            <p className="text-[10px] font-mono font-black text-emerald-900">
+                              <span className="text-emerald-600">Output:</span>{" "}
                               {tc.expectedOutput}
                             </p>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="bg-white/90 rounded-xl p-3 border border-emerald-400/50 shadow-sm">
-                        <p className="text-[11px] font-bold text-emerald-800">
+                      <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200/70 shadow-sm">
+                        <p className="text-[11px] font-bold text-emerald-700">
                           Tidak ada contoh test case yang disediakan untuk
                           tantangan ini.
                         </p>
@@ -1770,7 +1770,7 @@ export function ChallengeWorkspace({
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               type="button"
               onClick={() => setIsProblemPanelOpen(true)}
-              className="flex shrink-0 flex-col items-center gap-3 border-r border-emerald-500/30 bg-[#e8edea] px-2 py-4 text-emerald-950 transition-colors hover:bg-emerald-100"
+              className="flex shrink-0 flex-col items-center gap-3 border-r border-emerald-200/70 bg-white px-2 py-4 text-emerald-700 transition-colors hover:bg-emerald-50"
               title="Buka panel soal"
             >
               <PanelLeftOpen className="h-5 w-5" />
@@ -1784,47 +1784,50 @@ export function ChallengeWorkspace({
         {isProblemPanelOpen && (
           <div
             onMouseDown={startHorizontalResize("problem")}
-            className={cn(
-              "group relative z-20 flex w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-emerald-500/20 bg-[#dfe7e3] transition-colors hover:bg-emerald-300/70",
-              resizeMode === "problem" && "bg-emerald-400/80",
-            )}
+            className="group relative z-20 flex w-3 shrink-0 cursor-col-resize items-center justify-center"
             title="Geser untuk mengatur lebar panel soal"
           >
-            <GripVertical className="h-4 w-4 text-emerald-900/50 opacity-0 transition-opacity group-hover:opacity-100" />
+            <div className={cn("w-[1px] h-5 rounded-full transition-colors", resizeMode === "problem" ? "bg-emerald-500/70" : "bg-emerald-400/50 group-hover:bg-emerald-600/60")} />
           </div>
         )}
 
-        <div className="flex-1 flex flex-col bg-[#1e1e1e] min-h-0 min-w-[360px] overflow-hidden">
-          <div className="h-12 bg-[#252526] px-4 flex items-center justify-between border-b border-[#3d3d3d] shrink-0">
-            <div className="flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 text-emerald-500" />
-              <span className="text-[#cccccc] text-xs font-bold tracking-wider">
-                main.py
+        <div className="flex-1 flex flex-col bg-[#e8edea] min-h-0 min-w-[360px] overflow-hidden p-3 gap-2">
+          <div className="flex-1 flex flex-col bg-[#0a1a10] rounded-xl overflow-hidden min-h-0 shadow-lg">
+          <div className="h-10 bg-[#081510] px-4 flex items-center relative shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+              <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+              <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-emerald-300/70 text-xs font-mono font-medium">
+                {problem.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.py
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {/* <span className="text-emerald-600/60 text-[11px] font-mono">Python 3.10</span> */}
               <button
                 onClick={() => runCode(selectedTestCase.input)}
                 disabled={!isWorkStarted || isRunning || isInteractionLocked}
-                className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-md text-[11px] font-bold hover:bg-emerald-600/30 transition-all disabled:opacity-50"
                 type="button"
               >
-                <FlaskConical className="w-3.5 h-3.5" />
+                <FlaskConical className="w-3 h-3" />
                 Jalankan Test Case
               </button>
               <button
                 onClick={() => void submitCode()}
                 disabled={!isWorkStarted || isRunning || isInteractionLocked}
-                className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50 shadow-lg shadow-emerald-900/20"
+                className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white rounded-md text-[11px] font-bold hover:bg-emerald-500 transition-all disabled:opacity-50"
                 type="button"
               >
-                <Upload className="w-3.5 h-3.5" />
+                <Upload className="w-3 h-3" />
                 Submit Kode
               </button>
             </div>
           </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-h-0">
             <CodeEditor
               code={code}
               onChange={handleCodeChange}
@@ -1833,7 +1836,7 @@ export function ChallengeWorkspace({
             <AnimatePresence>
               {!isWorkStarted && (
                 <motion.div
-                  className="absolute inset-0 z-30 flex items-center justify-center bg-[#1e1e1e]/82 p-6 backdrop-blur-[2px]"
+                  className="absolute inset-0 z-30 flex items-center justify-center bg-[#0a1a10]/85 p-6 backdrop-blur-[2px]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -1869,27 +1872,30 @@ export function ChallengeWorkspace({
               )}
             </AnimatePresence>
           </div>
+          </div>
 
           <div
             onMouseDown={startResizing}
             className={cn(
-              "h-1.5 bg-[#3d3d3d] hover:bg-emerald-600 cursor-ns-resize transition-colors shrink-0 z-20",
-              isConsoleResizing && "bg-emerald-600",
+              "group relative h-2 flex items-center justify-center cursor-ns-resize shrink-0 z-20",
+              isConsoleResizing && "bg-emerald-100/40",
             )}
-          />
+          >
+            <div className="w-10 h-[1px] rounded-full bg-emerald-400/50 group-hover:bg-emerald-600/60 transition-colors" />
+          </div>
 
           <div
             style={{ height: `${consoleHeight}px` }}
-            className="bg-[#081410] border-t border-emerald-900/50 flex flex-col shrink-0 overflow-hidden"
+            className="bg-white rounded-xl flex flex-col shrink-0 overflow-hidden shadow-sm"
           >
-            <div className="h-10 bg-[#0a1a14] px-4 flex items-center gap-4 border-b border-emerald-900/30">
+            <div className="h-10 bg-white px-4 flex items-center gap-4 border-b border-slate-100">
               <button
                 onClick={() => setConsoleTab("testcase")}
                 className={cn(
                   "h-full px-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
                   consoleTab === "testcase"
-                    ? "text-emerald-400 border-emerald-500"
-                    : "text-emerald-700 border-transparent hover:text-emerald-500",
+                    ? "text-emerald-700 border-emerald-600"
+                    : "text-slate-400 border-transparent hover:text-emerald-600",
                 )}
                 type="button"
               >
@@ -1901,8 +1907,8 @@ export function ChallengeWorkspace({
                 className={cn(
                   "h-full px-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2",
                   consoleTab === "result"
-                    ? "text-emerald-400 border-emerald-500"
-                    : "text-emerald-700 border-transparent hover:text-emerald-500",
+                    ? "text-emerald-700 border-emerald-600"
+                    : "text-slate-400 border-transparent hover:text-emerald-600",
                 )}
                 type="button"
               >
@@ -1923,8 +1929,8 @@ export function ChallengeWorkspace({
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50",
                           selectedTestCaseId === tc.id
-                            ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/40"
-                            : "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border border-emerald-900/30",
+                            ? "bg-slate-900 text-white shadow-md"
+                            : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200",
                         )}
                         type="button"
                       >
@@ -1958,184 +1964,179 @@ export function ChallengeWorkspace({
                 <div className="space-y-4">
                   {!lastResult ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
-                      <div className="w-12 h-12 bg-emerald-900/20 rounded-2xl flex items-center justify-center text-emerald-800">
+                      <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 border border-emerald-200">
                         <Play className="w-6 h-6" />
                       </div>
-                      <p className="text-xs font-bold text-emerald-700 italic">
+                      <p className="text-xs font-bold text-slate-400 italic">
                         Jalankan kode Anda untuk melihat hasilnya...
                       </p>
                     </div>
                   ) : lastResult.judgeResults ? (
-                    <div className="space-y-4">
-                      {/* Overall Summary */}
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={cn(
-                                "text-lg font-black uppercase tracking-tighter",
-                                lastResult.status === "Accepted"
-                                  ? "text-emerald-400"
-                                  : "text-red-400",
-                              )}
-                            >
-                              {lastResult.status}
-                            </span>
-                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
-                              {lastResult.judgeResults.length > 0 &&
-                                `${lastResult.judgeResults.filter((r) => r.status === "AC").length}/${lastResult.judgeResults.length} Lulus`}
-                            </span>
-                          </div>
-                          {lastResult.status === "Accepted" ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-red-400" />
+                    <div className="space-y-3">
+                      {/* Status Banner */}
+                      <div className={cn(
+                        "rounded-xl p-3 border flex items-center gap-3",
+                        lastResult.status === "Accepted"
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-red-50 border-red-100",
+                      )}>
+                        {lastResult.status === "Accepted" ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className={cn(
+                            "text-sm font-black tracking-tight",
+                            lastResult.status === "Accepted" ? "text-emerald-700" : "text-red-700",
+                          )}>
+                            {lastResult.status}
+                          </p>
+                          {lastResult.judgeResults.length > 0 && (
+                            <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                              {lastResult.judgeResults.filter((r) => r.status === "AC").length} / {lastResult.judgeResults.length} test case lulus
+                            </p>
                           )}
                         </div>
                       </div>
 
-                      {/* Test Cases List */}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {publicJudgeResults.map(({ result, index }) => (
-                            <button
-                              key={result.test_case_id}
-                              onClick={() =>
-                                setSelectedResultTestCaseIndex(index)
-                              }
-                              className={cn(
-                                "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border",
-                                selectedResultTestCaseIndex === index
-                                  ? result.status === "AC"
-                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-900/40"
-                                    : "bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30"
-                                  : result.status === "AC"
-                                    ? "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border-emerald-900/30"
-                                    : "bg-red-950/20 text-red-400 hover:bg-red-950/30 border-red-900/30",
-                              )}
-                              type="button"
-                            >
-                              Case {index + 1}
-                            </button>
-                          ))}
-
-                          {hiddenJudgeResults.length > 0 && (
-                            <div className="flex items-center gap-2">
-                              {publicJudgeResults.length > 0 && (
-                                <span className="text-emerald-800/70 font-bold">
-                                  |
-                                </span>
-                              )}
-                              <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">
-                                Hidden
-                              </span>
-                            </div>
-                          )}
-
-                          {hiddenJudgeResults.map(({ result, index }) => (
-                            <button
-                              key={result.test_case_id}
-                              onClick={() =>
-                                setSelectedResultTestCaseIndex(index)
-                              }
-                              className={cn(
-                                "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border",
-                                selectedResultTestCaseIndex === index
-                                  ? result.status === "AC"
-                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-900/40"
-                                    : "bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30"
-                                  : result.status === "AC"
-                                    ? "bg-emerald-950/50 text-emerald-500 hover:bg-emerald-900/50 border-emerald-900/30"
-                                    : "bg-red-950/20 text-red-400 hover:bg-red-950/30 border-red-900/30",
-                              )}
-                              type="button"
-                            >
-                              Case {index + 1}
-                            </button>
-                          ))}
-                        </div>
+                      {/* Case Selector */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {publicJudgeResults.map(({ result, index }) => (
+                          <button
+                            key={result.test_case_id}
+                            onClick={() => setSelectedResultTestCaseIndex(index)}
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all",
+                              selectedResultTestCaseIndex === index
+                                ? result.status === "AC"
+                                  ? "bg-emerald-600 text-white shadow-sm"
+                                  : "bg-red-500 text-white shadow-sm"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                            )}
+                            type="button"
+                          >
+                            <div className={cn(
+                              "w-1.5 h-1.5 rounded-full shrink-0",
+                              selectedResultTestCaseIndex === index
+                                ? "bg-white/80"
+                                : result.status === "AC" ? "bg-emerald-500" : "bg-red-400",
+                            )} />
+                            Case {index + 1}
+                          </button>
+                        ))}
+                        {hiddenJudgeResults.length > 0 && (
+                          <>
+                            {publicJudgeResults.length > 0 && (
+                              <div className="w-px h-4 bg-slate-200 mx-0.5" />
+                            )}
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 px-1">
+                              Hidden
+                            </span>
+                            {hiddenJudgeResults.map(({ result, index }) => (
+                              <button
+                                key={result.test_case_id}
+                                onClick={() => setSelectedResultTestCaseIndex(index)}
+                                className={cn(
+                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all",
+                                  selectedResultTestCaseIndex === index
+                                    ? result.status === "AC"
+                                      ? "bg-emerald-600 text-white shadow-sm"
+                                      : "bg-red-500 text-white shadow-sm"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                                )}
+                                type="button"
+                              >
+                                <div className={cn(
+                                  "w-1.5 h-1.5 rounded-full shrink-0",
+                                  selectedResultTestCaseIndex === index
+                                    ? "bg-white/80"
+                                    : result.status === "AC" ? "bg-emerald-500" : "bg-red-400",
+                                )} />
+                                Case {index + 1}
+                              </button>
+                            ))}
+                          </>
+                        )}
                       </div>
 
-                      {/* Selected Test Case Details */}
+                      {/* Selected Case Details */}
                       {selectedJudgeResult && (
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
-                            <span
-                              className={cn(
-                                selectedJudgeResult.status === "AC"
-                                  ? "text-emerald-400"
-                                  : "text-red-400",
-                              )}
-                            >
+                        <div className="space-y-2.5">
+                          {/* Stats Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={cn(
+                              "inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide",
+                              selectedJudgeResult.status === "AC"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-red-100 text-red-600",
+                            )}>
                               {selectedJudgeResult.message}
                             </span>
-                            <span className="text-emerald-800/70">|</span>
-                            <span>
-                              {formatUsageValue(selectedJudgeResult.time_used)}
-                              ms
+                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500">
+                              {formatUsageValue(selectedJudgeResult.time_used)}ms
                             </span>
-                            <span className="text-emerald-800/70">|</span>
-                            <span>
-                              {formatUsageValue(
-                                selectedJudgeResult.memory_used * 1024,
-                              )}
-                              KB
+                            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500">
+                              {formatUsageValue(selectedJudgeResult.memory_used * 1024)}KB
                             </span>
                           </div>
+
+                          {/* Stdout */}
                           {selectedJudgeResult.stdout && (
-                            <div>
-                              <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
                                 Stdout
                               </label>
-                              <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
+                              <div className="bg-[#050d0a] border border-[#0f2a1a] rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">
                                 {selectedJudgeResult.stdout}
                               </div>
                             </div>
                           )}
-                          <div className="gap-3">
-                            <div>
-                              <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
-                                Input
-                              </label>
-                              <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-12 max-h-37.5 overflow-y-auto custom-scrollbar">
-                                {selectedJudgeResult.input || "Tidak ada input"}
-                              </div>
+
+                          {/* Input */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                              Input
+                            </label>
+                            <div className="bg-[#050d0a] border border-[#0f2a1a] rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">
+                              {selectedJudgeResult.input || "Tidak ada input"}
                             </div>
                           </div>
 
+                          {/* Error or Output Comparison */}
                           {selectedJudgeResult.error ? (
-                            <div>
-                              <label className="text-[10px] font-black uppercase tracking-widest text-red-600/70 block mb-1.5">
-                                Kesalahan
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-red-500 block">
+                                Error
                               </label>
-                              <div className="bg-red-950/20 border border-red-900 rounded-xl p-3 font-mono text-xs text-red-100 whitespace-pre-wrap max-h-37.5 overflow-y-auto custom-scrollbar">
+                              <div className="bg-[#1c0505] border border-red-900/60 rounded-xl p-3 font-mono text-xs text-red-200 whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">
                                 {selectedJudgeResult.error}
                               </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className={cn(
+                                  "text-[10px] font-black uppercase tracking-widest block",
+                                  selectedJudgeResult.status === "AC" ? "text-emerald-600" : "text-red-500",
+                                )}>
                                   Output Anda
                                 </label>
-                                <div
-                                  className={cn(
-                                    "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar",
-                                    selectedJudgeResult.status === "AC"
-                                      ? "border-emerald-900 text-emerald-100"
-                                      : "border-red-900/50 text-red-100 bg-red-950/10",
-                                  )}
-                                >
+                                <div className={cn(
+                                  "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-16 max-h-32 overflow-y-auto custom-scrollbar",
+                                  selectedJudgeResult.status === "AC"
+                                    ? "border-emerald-800/60 text-emerald-100"
+                                    : "border-red-800/60 text-red-200",
+                                )}>
                                   {selectedJudgeResult.output || "No output"}
                                 </div>
                               </div>
-                              <div>
-                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block mb-1.5">
-                                  Output yang Diharapkan
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600 block">
+                                  Diharapkan
                                 </label>
-                                <div className="bg-[#050d0a] border border-emerald-900 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-20 max-h-37.5 overflow-y-auto custom-scrollbar">
-                                  {selectedJudgeResult.expected ||
-                                    "No expected output"}
+                                <div className="bg-[#050d0a] border border-emerald-800/60 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-16 max-h-32 overflow-y-auto custom-scrollbar">
+                                  {selectedJudgeResult.expected || "No expected output"}
                                 </div>
                               </div>
                             </div>
@@ -2144,53 +2145,54 @@ export function ChallengeWorkspace({
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-5">
-                      <div className="flex items-center justify-between border-b border-emerald-900/20 pb-3">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              "text-lg font-black uppercase tracking-tighter",
-                              lastResult.status === "Accepted"
-                                ? "text-emerald-400"
-                                : "text-red-400",
-                            )}
-                          >
-                            {lastResult.status}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
-                            Runtime: {lastResult.runtime}ms
-                          </span>
-                        </div>
-                        {lastResult.status === "Accepted" ? (
-                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <div className="space-y-3">
+                      {/* Status Banner (non-judge) */}
+                      <div className={cn(
+                        "rounded-xl p-3 border flex items-center gap-3",
+                        lastResult.isCorrect
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-red-50 border-red-100",
+                      )}>
+                        {lastResult.isCorrect ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                         ) : (
-                          <AlertCircle className="w-5 h-5 text-red-400" />
+                          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
                         )}
+                        <div>
+                          <p className={cn(
+                            "text-sm font-black tracking-tight",
+                            lastResult.status === "Accepted" ? "text-emerald-700" : "text-red-700",
+                          )}>
+                            {lastResult.status}
+                          </p>
+                          <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                            Runtime: {lastResult.runtime}ms
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className={cn(
+                            "text-[10px] font-black uppercase tracking-widest block",
+                            lastResult.isCorrect ? "text-emerald-600" : "text-red-500",
+                          )}>
                             Output Anda
                           </label>
-                          <div
-                            className={cn(
-                              "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-15",
-                              lastResult.isCorrect
-                                ? "border-emerald-900/30 text-emerald-100"
-                                : "border-red-900/30 text-red-100 bg-red-950/10",
-                            )}
-                          >
-                            {lastResult.output.length > 0
-                              ? lastResult.output.join("\n")
-                              : "No output"}
+                          <div className={cn(
+                            "bg-[#050d0a] border rounded-xl p-3 font-mono text-xs whitespace-pre-wrap min-h-16",
+                            lastResult.isCorrect
+                              ? "border-emerald-800/60 text-emerald-100"
+                              : "border-red-800/60 text-red-200",
+                          )}>
+                            {lastResult.output.length > 0 ? lastResult.output.join("\n") : "No output"}
                           </div>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 block">
-                            Output yang Diharapkan
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600 block">
+                            Diharapkan
                           </label>
-                          <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-15">
+                          <div className="bg-[#050d0a] border border-emerald-800/60 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap min-h-16">
                             {selectedTestCase.expectedOutput}
                           </div>
                         </div>
@@ -2205,13 +2207,10 @@ export function ChallengeWorkspace({
 
         <div
           onMouseDown={startHorizontalResize("assistant")}
-          className={cn(
-            "group relative z-20 flex w-2 shrink-0 cursor-col-resize items-center justify-center border-x border-emerald-500/20 bg-[#dfe7e3] transition-colors hover:bg-emerald-300/70",
-            resizeMode === "assistant" && "bg-emerald-400/80",
-          )}
+          className="group relative z-20 flex w-3 shrink-0 cursor-col-resize items-center justify-center"
           title="Geser untuk mengatur lebar panel Bamboost"
         >
-          <GripVertical className="h-4 w-4 text-emerald-900/50 opacity-0 transition-opacity group-hover:opacity-100" />
+          <div className={cn("w-[1px] h-5 rounded-full transition-colors", resizeMode === "assistant" ? "bg-emerald-500/70" : "bg-emerald-400/50 group-hover:bg-emerald-600/60")} />
         </div>
 
         <motion.div
@@ -2249,6 +2248,7 @@ export function ChallengeWorkspace({
                   onStuckHelpChoiceNo={handleStuckHelpChoiceNo}
                   onStuckHelpChoiceYes={handleStuckHelpChoiceYes}
                   isStuckHelpSubmitting={isIdleHelpSubmitting}
+                  onDismissHelpCheckIn={() => setHelpCheckInType(null)}
                   embedded
                 />
               </motion.div>
@@ -2339,7 +2339,15 @@ export function ChallengeWorkspace({
                           className="relative bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm max-w-[min(100vw-2rem,340px)] w-[min(100vw-2rem,340px)]"
                         >
                           <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
-                          <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3">
+                          <button
+                            type="button"
+                            onClick={() => setHelpCheckInType(null)}
+                            className="absolute top-2 right-2 p-1 text-emerald-300 hover:text-emerald-600 transition-colors rounded"
+                            aria-label="Tutup"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                          <p className="text-sm font-black text-emerald-950 leading-snug text-center mb-3 pr-5">
                             {helpCheckInType === "error"
                               ? "Kamu kelihatannya kesulitan memperbaiki error. Butuh bantuan?"
                               : "Sudah cukup lama tanpa submit. Butuh bantuan?"}
@@ -2386,18 +2394,28 @@ export function ChallengeWorkspace({
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -8 }}
-                          className="relative w-full max-w-[340px] bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm text-center"
+                          className="relative w-full max-w-[340px] bg-[#f8faf9] border border-emerald-400/30 p-5 rounded-lg shadow-sm text-left"
                         >
                           <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#f8faf9] border-t-2 border-l-2 border-emerald-400/30 rotate-45" />
+                          <button
+                            type="button"
+                            onClick={() => setAgentMessage(null)}
+                            className="absolute top-2 right-2 p-1 text-emerald-300 hover:text-emerald-600 transition-colors rounded"
+                            aria-label="Tutup"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                           <div
                             className={cn(
                               "relative",
                               isAgentMessageLong && "max-h-36 overflow-hidden",
                             )}
                           >
-                            <p className="text-sm font-black text-emerald-950 leading-relaxed">
-                              {agentMessage}
-                            </p>
+                            <div className="text-sm font-semibold text-emerald-950 leading-relaxed [&_p]:font-semibold [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_code]:bg-emerald-100 [&_code]:text-emerald-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs pr-5">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {agentMessage ?? ""}
+                              </ReactMarkdown>
+                            </div>
                             {isAgentMessageLong && (
                               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f8faf9] to-transparent" />
                             )}
@@ -2465,7 +2483,7 @@ export function ChallengeWorkspace({
                 <button
                   type="button"
                   onClick={closeTutorial}
-                  className="rounded-lg p-2 text-emerald-800 transition-colors hover:bg-white hover:text-emerald-950"
+                  className="rounded-lg p-2 text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-950"
                   title="Tutup tutorial"
                 >
                   <X className="h-6 w-6" />

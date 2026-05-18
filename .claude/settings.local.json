@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Copy-Item \"src\\\\images\\\\app logo v2.png\" \"src\\\\app\\\\icon.png\")"
+    ]
+  }
+}

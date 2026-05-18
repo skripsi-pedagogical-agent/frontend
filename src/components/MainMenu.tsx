@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
-  CheckCircle2,
   ChevronRight,
   Sparkles,
   Code2,
   Terminal,
+  Check,
 } from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 
@@ -271,8 +271,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                 <div className="mt-8 pt-6 border-t border-emerald-100 flex items-center justify-between">
                   {isLoggedIn ? (
-                    <div className="flex items-center gap-2 text-emerald-600">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <div className={cn(
+                      "flex items-center gap-1.5",
+                      (problem.statusId ?? 0) === 2 ? "text-emerald-600" :
+                      (problem.statusId ?? 0) === 1 ? "text-violet-600" :
+                      "text-slate-400"
+                    )}>
+                      {(problem.statusId ?? 0) === 2 ? (
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      ) : (problem.statusId ?? 0) === 1 ? (
+                        <div className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full border border-slate-300 shrink-0" />
+                      )}
                       <span className="text-[10px] font-black uppercase tracking-widest">
                         {STATUS_LABELS[problem.statusId ?? 0]}
                       </span>
