@@ -28,9 +28,9 @@ import {
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import NextImage from "next/image";
-import imgWorkspace from "@/src/images/messageImage_1778781856852.jpg";
+import imgWorkspace from "@/src/images/new-interface.jpg";
 import imgBamboostHelp from "@/src/images/messageImage_1778781812364.jpg";
-import imgTestcase from "@/src/images/messageImage_1778781874816.jpg";
+import imgTestcase from "@/src/images/new-buttons.jpg";
 import { ChatBot, type Message } from "@/src/components/ChatBot";
 import { CodeEditor } from "@/src/components/CodeEditor";
 import { PandaMascot } from "@/src/components/PandaMascot";
@@ -103,7 +103,7 @@ const TUTORIAL_SLIDES = [
   {
     title: "Test case dan submit",
     description:
-      "Gunakan Jalankan Test Case untuk mencoba input contoh. Jika hasilnya sudah yakin, gunakan Submit Kode untuk penilaian akhir dari semua test case.",
+      "Gunakan Jalankan Test Case untuk mencoba input contoh. Jika hasilnya sudah yakin, gunakan Submit Kode untuk penilaian akhir dari semua test case. Semangat!",
     image: imgTestcase,
     mascotState: "thinking" as AgentState,
   },
@@ -2000,7 +2000,7 @@ export function ChallengeWorkspace({
                       <button
                         key={tc.id}
                         onClick={() => setSelectedTestCaseId(tc.id)}
-                        disabled={!isWorkStarted || isInteractionLocked}
+                        disabled={!isWorkStarted}
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50",
                           selectedTestCaseId === tc.id
