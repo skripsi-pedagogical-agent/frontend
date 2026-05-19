@@ -117,6 +117,7 @@ interface ChatBotProps {
   onStuckHelpChoiceNo: (reason: StuckHelpOption) => void;
   onStuckHelpChoiceYes: (reason: StuckHelpOption) => void;
   isStuckHelpSubmitting: boolean;
+  onDismissHelpCheckIn?: () => void;
   agentState:
     | "idle"
     | "thinking"
@@ -148,6 +149,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   onStuckHelpChoiceNo,
   onStuckHelpChoiceYes,
   isStuckHelpSubmitting,
+  onDismissHelpCheckIn,
   agentState,
   embedded = false,
   isExpanded = false,
@@ -366,7 +368,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     {msg.role === "assistant" && msg.proactive ? (
                       <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 border border-amber-300 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm">
                         <Zap className="h-3 w-3" />
-                        Sigap
+                        to the rescue!
                       </span>
                     ) : msg.role === "assistant" &&
                       msg.type !== "observational" ? (
@@ -406,6 +408,16 @@ export const ChatBot: React.FC<ChatBotProps> = ({
             {helpCheckInType !== null && (
               <div className="space-y-4 pt-4 border-t border-emerald-200/50">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left relative overflow-hidden">
+                  {onDismissHelpCheckIn && (
+                    <button
+                      type="button"
+                      onClick={onDismissHelpCheckIn}
+                      className="absolute top-2 right-2 p-1 text-amber-300 hover:text-amber-600 transition-colors rounded"
+                      aria-label="Tutup"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <p className="text-sm font-bold text-slate-800 mb-5">
                     {helpCheckInType === "error"
                       ? "Kelihatannya kamu kesulitan memperbaiki error. Ada yang bingung?"

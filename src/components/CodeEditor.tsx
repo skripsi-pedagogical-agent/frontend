@@ -87,18 +87,41 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     };
   }, []);
 
+  const defineTheme = useCallback((monaco: Monaco) => {
+    registerCompletionProvider(monaco);
+    monaco.editor.defineTheme("emerald-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#0a1a10",
+        "editor.lineHighlightBackground": "#0f2418",
+        "editorLineNumber.foreground": "#2d5a3a",
+        "editorLineNumber.activeForeground": "#4ade80",
+        "editorGutter.background": "#0a1a10",
+        "editorCursor.foreground": "#4ade80",
+        "editor.selectionBackground": "#1a4a28",
+        "editor.inactiveSelectionBackground": "#152a1c",
+        "scrollbar.shadow": "#00000000",
+        "scrollbarSlider.background": "#1a3020aa",
+        "scrollbarSlider.hoverBackground": "#1e3a26cc",
+        "scrollbarSlider.activeBackground": "#244830",
+      },
+    });
+  }, [registerCompletionProvider]);
+
   return (
     <div
-      className="w-full h-full overflow-hidden shadow-sm bg-[#1e1e1e]"
+      className="w-full h-full overflow-hidden shadow-sm bg-[#0a1a10]"
       style={{ contain: "strict" }}
     >
       <Editor
         height="100%"
         defaultLanguage={language}
-        beforeMount={registerCompletionProvider}
+        beforeMount={defineTheme}
         value={code}
         onChange={onChange}
-        theme="vs-dark"
+        theme="emerald-dark"
         options={{
           minimap: { enabled: false },
           fontSize: 14,

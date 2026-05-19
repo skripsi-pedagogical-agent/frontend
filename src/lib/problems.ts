@@ -14,6 +14,7 @@ export interface Problem {
   starterCode: string;
   testCases: TestCase[];
   slug: string;
+  createdAt?: string;
   validator: (outputLines: string[]) => boolean;
 }
 
@@ -34,6 +35,7 @@ export function mapBackendProblemToFrontend(backendProblem: {
   starter_code: string;
   topic: string;
   slug: string;
+  created_at?: string;
   test_cases?: Array<{
     id: string;
     input_data: string;
@@ -61,6 +63,7 @@ export function mapBackendProblemToFrontend(backendProblem: {
     description: backendProblem.description,
     starterCode: backendProblem.starter_code,
     slug: backendProblem.slug,
+    createdAt: backendProblem.created_at,
     testCases:
       backendProblem.test_cases && backendProblem.test_cases.length > 0
         ? backendProblem.test_cases.map((testCase, index) => ({

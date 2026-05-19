@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
-  CheckCircle2,
   ChevronRight,
   Sparkles,
   Code2,
   Terminal,
+  Check,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { PandaMascot } from "./PandaMascot";
 
@@ -18,6 +21,7 @@ interface Problem {
   statusId?: 0 | 1 | 2;
   category: string;
   slug: string;
+  createdAt?: string;
 }
 
 const STATUS_LABELS: Record<0 | 1 | 2, string> = {
@@ -53,6 +57,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState<"" | "Easy" | "Medium" | "Hard">("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [sortBy, setSortBy] = useState<"" | "difficulty" | "date">("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (key: "difficulty" | "date") => {
+    if (sortBy === key) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortOrder("asc");
+    }
+  };
 
   const categories = useMemo(
     () => Array.from(new Set(problems.map((item) => item.category))).sort(),
@@ -62,7 +77,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const filteredProblems = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return problems.filter((problem) => {
+    const filtered = problems.filter((problem) => {
       const matchesSearch =
         normalizedSearch.length === 0 ||
         problem.title.toLowerCase().includes(normalizedSearch) ||
@@ -77,7 +92,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       return matchesSearch && matchesDifficulty && matchesCategory;
     });
-  }, [problems, searchTerm, selectedDifficulty, selectedCategory]);
+
+    if (sortBy === "difficulty") {
+      const diffOrder: Record<string, number> = { Easy: 0, Medium: 1, Hard: 2 };
+      filtered.sort((a, b) => {
+        const diff = (diffOrder[a.difficulty] ?? 0) - (diffOrder[b.difficulty] ?? 0);
+        return sortOrder === "asc" ? diff : -diff;
+      });
+    } else if (sortBy === "date") {
+      filtered.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      });
+    }
+
+    return filtered;
+  }, [problems, searchTerm, selectedDifficulty, selectedCategory, sortBy, sortOrder]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -181,7 +212,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
 
           {/* Search & Filters Bar */}
-          <div className="flex flex-col md:flex-row gap-4 w-full">
+          <div className="flex flex-col md:flex-row gap-3 w-full">
             {/* Search Input */}
             <div className="flex-1">
               <input
@@ -189,16 +220,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Cari judul, kategori, atau deskripsi..."
-                className="w-full rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
+                className="w-full rounded-xl border border-emerald-200 bg-white py-3 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-700 placeholder:text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
               />
             </div>
 
             {/* Dropdowns Group */}
-            <div className="flex flex-col sm:flex-row gap-4 shrink-0">
+            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
               <select
                 value={selectedDifficulty}
                 onChange={(e) => setSelectedDifficulty(e.target.value as "" | "Easy" | "Medium" | "Hard")}
-                className="w-full sm:w-48 rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
+                className="w-full sm:w-48 rounded-xl border border-emerald-200 bg-white py-3 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
               >
                 <option value="">Semua Difficulty</option>
                 <option value="Easy">Easy</option>
@@ -209,7 +240,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full sm:w-48 rounded-2xl border border-emerald-200 bg-white py-3 px-4 text-sm text-emerald-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
+                className="w-full sm:w-48 rounded-xl border border-emerald-200 bg-white py-3 px-4 text-[10px] font-black uppercase tracking-widest text-emerald-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
               >
                 <option value="">Semua Kategori</option>
                 {categories.map((category) => (
@@ -221,9 +252,60 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             </div>
           </div>
 
+          {/* Sort Controls */}
+          <div className="flex items-center gap-3 pt-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 shrink-0">
+              Urutkan
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleSort("difficulty")}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all",
+                  sortBy === "difficulty"
+                    ? "bg-emerald-700 border-emerald-700 text-white shadow-md shadow-emerald-900/20"
+                    : "bg-white border-emerald-200 text-emerald-600 hover:border-emerald-400 shadow-sm",
+                )}
+              >
+                Difficulty
+                {sortBy === "difficulty" ? (
+                  sortOrder === "asc" ? (
+                    <ArrowUp className="w-3 h-3" />
+                  ) : (
+                    <ArrowDown className="w-3 h-3" />
+                  )
+                ) : (
+                  <ArrowUpDown className="w-3 h-3 opacity-40" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSort("date")}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all",
+                  sortBy === "date"
+                    ? "bg-emerald-700 border-emerald-700 text-white shadow-md shadow-emerald-900/20"
+                    : "bg-white border-emerald-200 text-emerald-600 hover:border-emerald-400 shadow-sm",
+                )}
+              >
+                Tanggal Rilis
+                {sortBy === "date" ? (
+                  sortOrder === "asc" ? (
+                    <ArrowUp className="w-3 h-3" />
+                  ) : (
+                    <ArrowDown className="w-3 h-3" />
+                  )
+                ) : (
+                  <ArrowUpDown className="w-3 h-3 opacity-40" />
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Empty State Message */}
           {filteredProblems.length === 0 && (
-            <div className="py-12 text-center bg-white rounded-[2rem] border border-emerald-100">
+            <div className="py-12 text-center bg-white rounded-[2rem] border border-emerald-100 mt-4">
               <p className="text-emerald-600 font-medium">
                 Tidak ada tantangan yang cocok dengan filter ini.
               </p>
@@ -231,7 +313,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           )}
 
           {/* Grid List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
             {filteredProblems.map((problem, index) => (
               <motion.button
                 key={problem.id}
@@ -271,8 +353,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                 <div className="mt-8 pt-6 border-t border-emerald-100 flex items-center justify-between">
                   {isLoggedIn ? (
-                    <div className="flex items-center gap-2 text-emerald-600">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <div className={cn(
+                      "flex items-center gap-1.5",
+                      (problem.statusId ?? 0) === 2 ? "text-emerald-600" :
+                      (problem.statusId ?? 0) === 1 ? "text-violet-600" :
+                      "text-slate-400"
+                    )}>
+                      {(problem.statusId ?? 0) === 2 ? (
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      ) : (problem.statusId ?? 0) === 1 ? (
+                        <div className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full border border-slate-300 shrink-0" />
+                      )}
                       <span className="text-[10px] font-black uppercase tracking-widest">
                         {STATUS_LABELS[problem.statusId ?? 0]}
                       </span>
