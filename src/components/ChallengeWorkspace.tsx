@@ -4,6 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import {
   AlertCircle,
   ArrowLeft,
@@ -1594,7 +1597,7 @@ export function ChallengeWorkspace({
             </span>
           </div> */}
           <h1 className="text-xl font-black tracking-tight text-emerald-950">
-            Bamboost!
+            Bamboost
           </h1>
           <div className="ml-4 px-3 py-1 bg-emerald-100 rounded-full border border-emerald-300/60">
             <span className="text-xs font-black text-emerald-900 uppercase tracking-wider">
@@ -1719,43 +1722,113 @@ export function ChallengeWorkspace({
                       </span>
                     </div>
 
-                    <div className="prose prose-emerald max-w-none">
-                      <p className="text-emerald-900 font-bold leading-relaxed whitespace-pre-wrap text-sm">
+                    <div className="prose prose-emerald max-w-none space-y-4">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          img: (props: any) => (
+                            <img
+                              {...props}
+                              className="my-4 max-w-full h-auto rounded-lg border border-emerald-200 shadow-md mx-auto"
+                            />
+                          ),
+                          p: (props: any) => {
+                            // Check if children contain block-level elements (pre, table, img)
+                            const children = Array.isArray(props.children) ? props.children : [props.children];
+                            const hasBlockElements = children.some((child: any) => {
+                              if (!child) return false;
+                              // Check for HTML tag types (pre, table, img, etc)
+                              if (typeof child.type === 'string') {
+                                return ['pre', 'table', 'img', 'div', 'blockquote'].includes(child.type);
+                              }
+                              // Check for component names
+                              if (child.type?.name === 'code' || child.type?.name === 'pre') return true;
+                              return false;
+                            });
+                            
+                            if (hasBlockElements) {
+                              // Return fragment if contains block elements
+                              return <>{props.children}</>;
+                            }
+                            
+                            return (
+                              <p className="text-emerald-900 font-semibold leading-relaxed text-sm">
+                                {props.children}
+                              </p>
+                            );
+                          },
+                          h1: (props: any) => (
+                            <h1 className="text-lg font-black text-emerald-950">
+                              {props.children}
+                            </h1>
+                          ),
+                          h2: (props: any) => (
+                            <h2 className="text-base font-bold text-emerald-950">
+                              {props.children}
+                            </h2>
+                          ),
+                          h3: (props: any) => (
+                            <h3 className="text-sm font-bold text-emerald-900">
+                              {props.children}
+                            </h3>
+                          ),
+                          ul: (props: any) => (
+                            <ul className="list-disc list-inside text-emerald-900 text-sm space-y-1">
+                              {props.children}
+                            </ul>
+                          ),
+                          ol: (props: any) => (
+                            <ol className="list-decimal list-inside text-emerald-900 text-sm space-y-1">
+                              {props.children}
+                            </ol>
+                          ),
+                          code: (props: any) => {
+                            const { node, inline, children, ...rest } = props;
+                            return inline ? (
+                              <code className="bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900 font-mono text-xs" {...rest}>
+                                {children}
+                              </code>
+                            ) : (
+                              <pre className="bg-emerald-50 px-2 py-1.5 rounded overflow-x-auto border border-emerald-200 my-1 block text-xs">
+                                <code className="text-emerald-900 font-mono" {...rest}>
+                                  {children}
+                                </code>
+                              </pre>
+                            );
+                          },
+                          blockquote: (props: any) => (
+                            <blockquote className="border-l-4 border-emerald-400 pl-4 py-2 text-emerald-800 italic bg-emerald-50 p-3 rounded">
+                              {props.children}
+                            </blockquote>
+                          ),
+                          table: (props: any) => (
+                            <div className="overflow-x-auto my-3 border border-emerald-200 rounded-lg">
+                              <table className="w-full text-sm border-collapse">
+                                {props.children}
+                              </table>
+                            </div>
+                          ),
+                          thead: (props: any) => (
+                            <thead className="bg-emerald-100 border-b border-emerald-200">
+                              {props.children}
+                            </thead>
+                          ),
+                          th: (props: any) => (
+                            <th className="p-2 text-emerald-900 font-bold text-left border-r border-emerald-200 last:border-r-0">
+                              {props.children}
+                            </th>
+                          ),
+                          td: (props: any) => (
+                            <td className="p-2 text-emerald-800 border-r border-emerald-100 last:border-r-0 border-b border-emerald-100">
+                              {props.children}
+                            </td>
+                          ),
+                        }}
+                      >
                         {problem.description}
-                      </p>
+                      </ReactMarkdown>
                     </div>
-                  </section>
-
-                  <section className="space-y-4 pt-8 border-t border-emerald-200/60">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-emerald-600">
-                      Contoh
-                    </h3>
-                    {hasTestCases ? (
-                      problem.testCases.map((tc, index) => (
-                        <div key={tc.id} className="space-y-2">
-                          <p className="text-[11px] font-black text-emerald-700">
-                            Contoh {index + 1}:
-                          </p>
-                          <div className="bg-emerald-50 rounded-xl p-3 space-y-2 border border-emerald-200/70 shadow-sm">
-                            <p className="text-[10px] font-mono font-black text-emerald-900">
-                              <span className="text-emerald-600">Input:</span>{" "}
-                              {tc.input}
-                            </p>
-                            <p className="text-[10px] font-mono font-black text-emerald-900">
-                              <span className="text-emerald-600">Output:</span>{" "}
-                              {tc.expectedOutput}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200/70 shadow-sm">
-                        <p className="text-[11px] font-bold text-emerald-700">
-                          Tidak ada contoh test case yang disediakan untuk
-                          tantangan ini.
-                        </p>
-                      </div>
-                    )}
                   </section>
                 </div>
               </div>
@@ -1794,13 +1867,13 @@ export function ChallengeWorkspace({
         <div className="flex-1 flex flex-col bg-[#e8edea] min-h-0 min-w-[360px] overflow-hidden p-3 gap-2">
           <div className="flex-1 flex flex-col bg-[#0a1a10] rounded-xl overflow-hidden min-h-0 shadow-lg">
           <div className="h-10 bg-[#081510] px-4 flex items-center relative shrink-0">
-            <div className="flex items-center gap-1.5 shrink-0">
+            {/* <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
               <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
               <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-emerald-300/70 text-xs font-mono font-medium">
+            </div> */}
+            <div className="absolute inset-0 flex items-center justify-start pointer-events-none pl-4">
+              <span className="text-emerald-300/70 text-xs font-mono font-medium truncate">
                 {problem.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.py
               </span>
             </div>
