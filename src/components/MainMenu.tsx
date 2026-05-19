@@ -289,7 +289,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     : "bg-white border-emerald-200 text-emerald-600 hover:border-emerald-400 shadow-sm",
                 )}
               >
-                Tanggal Rilis
+                Rilis
                 {sortBy === "date" ? (
                   sortOrder === "asc" ? (
                     <ArrowUp className="w-3 h-3" />
@@ -356,13 +356,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <div className={cn(
                       "flex items-center gap-1.5",
                       (problem.statusId ?? 0) === 2 ? "text-emerald-600" :
-                      (problem.statusId ?? 0) === 1 ? "text-violet-600" :
+                      (problem.statusId ?? 0) === 1 ? "text-amber-500" :
                       "text-slate-400"
                     )}>
                       {(problem.statusId ?? 0) === 2 ? (
                         <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                       ) : (problem.statusId ?? 0) === 1 ? (
-                        <div className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                        <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                       ) : (
                         <div className="w-2 h-2 rounded-full border border-slate-300 shrink-0" />
                       )}

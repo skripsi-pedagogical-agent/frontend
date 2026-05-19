@@ -28,9 +28,9 @@ import {
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import NextImage from "next/image";
-import imgWorkspace from "@/src/images/messageImage_1778781856852.jpg";
+import imgWorkspace from "@/src/images/new-interface.jpg";
 import imgBamboostHelp from "@/src/images/messageImage_1778781812364.jpg";
-import imgTestcase from "@/src/images/messageImage_1778781874816.jpg";
+import imgTestcase from "@/src/images/new-buttons.jpg";
 import { ChatBot, type Message } from "@/src/components/ChatBot";
 import { CodeEditor } from "@/src/components/CodeEditor";
 import { PandaMascot } from "@/src/components/PandaMascot";
@@ -103,7 +103,7 @@ const TUTORIAL_SLIDES = [
   {
     title: "Test case dan submit",
     description:
-      "Gunakan Jalankan Test Case untuk mencoba input contoh. Jika hasilnya sudah yakin, gunakan Submit Kode untuk penilaian akhir dari semua test case.",
+      "Gunakan Jalankan Test Case untuk mencoba input contoh. Jika hasilnya sudah yakin, gunakan Submit Kode untuk penilaian akhir dari semua test case. Semangat!",
     image: imgTestcase,
     mascotState: "thinking" as AgentState,
   },
@@ -217,6 +217,7 @@ export function ChallengeWorkspace({
   const [assistantPanelWidth, setAssistantPanelWidth] = useState(420);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
 
   const [code, setCode] = useState(problem.starterCode);
   const [output, setOutput] = useState<string[]>([]);
@@ -1287,6 +1288,7 @@ export function ChallengeWorkspace({
         setAgentMessage(
           `Selamat ${username}! Semua test case lulus. Kamu berhasil menyelesaikan challenge ini!`,
         );
+        setIsCompletionModalOpen(true);
       }
     } catch (err: unknown) {
       const errorMessage = String(err);
@@ -1998,12 +2000,12 @@ export function ChallengeWorkspace({
                       <button
                         key={tc.id}
                         onClick={() => setSelectedTestCaseId(tc.id)}
-                        disabled={!isWorkStarted || isInteractionLocked}
+                        disabled={!isWorkStarted}
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50",
                           selectedTestCaseId === tc.id
-                            ? "bg-slate-900 text-white shadow-md"
-                            : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200",
+                            ? "bg-emerald-800 text-white shadow-md"
+                            : "bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-200",
                         )}
                         type="button"
                       >
@@ -2017,7 +2019,7 @@ export function ChallengeWorkspace({
                       <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 mb-1.5 block">
                         Input
                       </label>
-                      <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100">
+                      <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 font-mono text-xs font-semibold text-emerald-800">
                         {selectedTestCase.input === "None"
                           ? "Tidak diperlukan input"
                           : selectedTestCase.input}
@@ -2027,7 +2029,7 @@ export function ChallengeWorkspace({
                       <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 mb-1.5 block">
                         Output yang Diharapkan
                       </label>
-                      <div className="bg-[#050d0a] border border-emerald-900/30 rounded-xl p-3 font-mono text-xs text-emerald-100 whitespace-pre-wrap">
+                      <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 font-mono text-xs font-semibold text-emerald-800 whitespace-pre-wrap">
                         {selectedTestCase.expectedOutput}
                       </div>
                     </div>
@@ -2671,11 +2673,126 @@ export function ChallengeWorkspace({
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isCompletionModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-emerald-950/50 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Confetti particles */}
+            {[
+              { x: "15%", delay: 0, color: "bg-emerald-400", size: "w-3 h-3" },
+              { x: "30%", delay: 0.1, color: "bg-yellow-400", size: "w-2 h-2" },
+              { x: "50%", delay: 0.05, color: "bg-emerald-300", size: "w-4 h-4" },
+              { x: "65%", delay: 0.15, color: "bg-teal-400", size: "w-2 h-2" },
+              { x: "80%", delay: 0.08, color: "bg-yellow-300", size: "w-3 h-3" },
+              { x: "20%", delay: 0.2, color: "bg-teal-300", size: "w-2 h-2" },
+              { x: "45%", delay: 0.12, color: "bg-emerald-500", size: "w-3 h-3" },
+              { x: "70%", delay: 0.18, color: "bg-yellow-400", size: "w-2 h-2" },
+              { x: "10%", delay: 0.25, color: "bg-emerald-400", size: "w-2 h-2" },
+              { x: "88%", delay: 0.07, color: "bg-teal-300", size: "w-3 h-3" },
+              { x: "55%", delay: 0.22, color: "bg-yellow-300", size: "w-2 h-2" },
+              { x: "35%", delay: 0.16, color: "bg-emerald-300", size: "w-3 h-3" },
+            ].map((p, i) => (
+              <motion.div
+                key={i}
+                className={cn("absolute top-[15%] rounded-full", p.color, p.size)}
+                style={{ left: p.x }}
+                initial={{ opacity: 0, y: 0 }}
+                animate={{
+                  opacity: [0, 1, 1, 0],
+                  y: [0, -80, -160, -240],
+                  x: [0, (i % 2 === 0 ? 1 : -1) * (10 + (i % 4) * 8), (i % 2 === 0 ? -1 : 1) * 15, 0],
+                  rotate: [0, 180, 360],
+                }}
+                transition={{
+                  duration: 2.2,
+                  delay: p.delay,
+                  repeat: Infinity,
+                  repeatDelay: 0.8,
+                  ease: "easeOut",
+                }}
+              />
+            ))}
+
+            <motion.div
+              className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl shadow-emerald-950/30 border border-emerald-100"
+              initial={{ opacity: 0, scale: 0.7, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.85, y: 20 }}
+              transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsCompletionModalOpen(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                aria-label="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex flex-col items-center px-8 pt-16 pb-10 text-center">
+                {/* Mascot with extra bounce */}
+                <motion.div
+                  animate={{ y: [0, -14, 0] }}
+                  transition={{ duration: 0.7, repeat: Infinity, ease: "easeInOut" }}
+                  className="mb-4"
+                >
+                  <div className="scale-[1.5]">
+                    <PandaMascot state="happy" />
+                  </div>
+                </motion.div>
+
+                <motion.p
+                  className="mt-6 text-2xl font-black text-emerald-900 tracking-tight"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  Luar Biasa!
+                </motion.p>
+                <motion.p
+                  className="mt-2 text-sm font-bold text-emerald-700"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                >
+                  Semua test case lulus. Challenge selesai!
+                </motion.p>
+                <motion.p
+                  className="mt-1 text-xs font-semibold text-emerald-500"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.45 }}
+                >
+                  Kamu berhasil, {username}!
+                </motion.p>
+
+                <motion.button
+                  type="button"
+                  onClick={() => setIsCompletionModalOpen(false)}
+                  className="mt-7 w-full rounded-2xl bg-emerald-800 py-3 text-sm font-black text-white hover:bg-emerald-700 transition-colors"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  Tutup
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <footer className="h-8 bg-emerald-950 text-emerald-100 px-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            Sistem Online
+            Bamboost Online
           </div>
           <div className="text-emerald-500/60">|</div>
           <div>Python 3.10</div>
