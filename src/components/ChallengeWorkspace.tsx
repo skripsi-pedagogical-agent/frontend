@@ -50,6 +50,7 @@ import {
 } from "@/src/services/agentService";
 import {
   getLatestEditorSession,
+  type EditorSession,
   type EditorSessionStatusId,
   upsertEditorSession,
   startProblem,
@@ -236,6 +237,7 @@ export function ChallengeWorkspace({
   const [timeTaken, setTimeTaken] = useState(0);
   const [showTimeTaken, setShowTimeTaken] = useState(true);
   const [isWorkStarted, setIsWorkStarted] = useState(false);
+  const [isStartingWork, setIsStartingWork] = useState(false);
   const [stuckReasons, setStuckReasons] = useState<StuckReason[]>(
     FALLBACK_STUCK_REASONS,
   );
@@ -281,21 +283,21 @@ export function ChallengeWorkspace({
         keepalive?: boolean;
         force?: boolean;
       },
-    ) => {
+    ): Promise<EditorSession | null> => {
       if (!isBackendProblem) {
-        return;
+        return null;
       }
 
       const authUser = getStoredAuthUser();
       if (!authUser?.id) {
-        return;
+        return null;
       }
 
       const statusId = options?.statusIdOverride ?? latestStatusIdRef.current;
       const signature = `${statusId}:${codeToSave}`;
 
       if (!options?.force && signature === lastSavedSignatureRef.current) {
-        return;
+        return null;
       }
 
       try {
@@ -311,8 +313,10 @@ export function ChallengeWorkspace({
 
         latestSessionIdRef.current = saved.id;
         lastSavedSignatureRef.current = `${saved.status_id}:${saved.code}`;
+        return saved;
       } catch (error) {
         console.error("Failed to save editor session:", error);
+        return null;
       }
     },
     [isBackendProblem, problem.id],
@@ -338,6 +342,7 @@ export function ChallengeWorkspace({
     setTimeTaken(0);
     setShowTimeTaken(true);
     setIsWorkStarted(false);
+    setIsStartingWork(false);
     setHelpCheckInType(null);
     setErrorCount(0);
     setDeletionCount(0);
@@ -349,6 +354,8 @@ export function ChallengeWorkspace({
     hasGreetedRef.current = false;
     timeTakenRef.current = 0;
     isWorkStartedRef.current = false;
+    latestSessionIdRef.current = null;
+    latestStatusIdRef.current = 1;
     lastCodeLength.current = problem.starterCode.length;
     hasUserTypedRef.current = false;
     lastSavedSignatureRef.current = null;
@@ -402,9 +409,13 @@ export function ChallengeWorkspace({
         setTimeTaken(initialTimeTaken);
         timeTakenRef.current = initialTimeTaken;
 
-        setIsWorkStarted(true);
-        isWorkStartedRef.current = true;
-        setAgentState("idle");
+        const hasStartedSession =
+          Boolean(session.started_at || session.first_accepted_at) ||
+          session.status_id === 2;
+
+        setIsWorkStarted(hasStartedSession);
+        isWorkStartedRef.current = hasStartedSession;
+        setAgentState(hasStartedSession ? "idle" : "sleeping");
 
         if (!hasUserTypedRef.current && session.code) {
           setCode(session.code);
@@ -502,6 +513,10 @@ export function ChallengeWorkspace({
       }
 
       if (isInteractionLocked) {
+        return;
+      }
+
+      if (!isWorkStartedRef.current && !latestSessionIdRef.current) {
         return;
       }
 
@@ -1351,6 +1366,10 @@ export function ChallengeWorkspace({
       return;
     }
 
+    if (isBackendProblem && !latestSessionIdRef.current) {
+      await saveEditorSession(codeRef.current, { force: true });
+    }
+
     const optimisticUserMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -1464,7 +1483,10 @@ export function ChallengeWorkspace({
 
     void (async () => {
       try {
-        if (!isInteractionLocked) {
+        const shouldPersistEditorSession =
+          isWorkStartedRef.current || latestSessionIdRef.current !== null;
+
+        if (!isInteractionLocked && shouldPersistEditorSession) {
           await saveEditorSession(codeRef.current, { force: true });
         }
 
@@ -1583,20 +1605,46 @@ export function ChallengeWorkspace({
     .toString()
     .padStart(2, "0")}:${(timeTaken % 60).toString().padStart(2, "0")}`;
 
-  const startWorking = useCallback(() => {
-    setIsWorkStarted(true);
-    isWorkStartedRef.current = true;
-    setAgentState("idle");
-    setAgentMessage(null);
-    setSubmitIdleTime(0);
-    lastIdleTriggerTimeRef.current = 0;
-
-    if (isBackendProblem && currentUserId !== "anonymous") {
-      void startProblem(currentUserId, problem.id).catch((err) => {
-        console.error("Failed to start problem:", err);
-      });
+  const startWorking = useCallback(async () => {
+    if (isStartingWork) {
+      return;
     }
-  }, [currentUserId, isBackendProblem, problem.id]);
+
+    const activateWorkspace = () => {
+      setIsWorkStarted(true);
+      isWorkStartedRef.current = true;
+      setAgentState("idle");
+      setAgentMessage(null);
+      setSubmitIdleTime(0);
+      lastIdleTriggerTimeRef.current = 0;
+    };
+
+    if (!isBackendProblem || currentUserId === "anonymous") {
+      activateWorkspace();
+      return;
+    }
+
+    setIsStartingWork(true);
+
+    try {
+      await startProblem(currentUserId, problem.id);
+      await saveEditorSession(codeRef.current, { force: true });
+
+      activateWorkspace();
+    } catch (err) {
+      console.error("Failed to start problem:", err);
+      setAgentState("sleeping");
+      setAgentMessage("Gagal memulai challenge. Coba tekan Mulai Mengerjakan lagi.");
+    } finally {
+      setIsStartingWork(false);
+    }
+  }, [
+    currentUserId,
+    isBackendProblem,
+    isStartingWork,
+    problem.id,
+    saveEditorSession,
+  ]);
 
   const closeTutorial = useCallback(() => {
     try {
@@ -1966,10 +2014,11 @@ export function ChallengeWorkspace({
                     <button
                       type="button"
                       onClick={startWorking}
-                      className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-black text-white transition-colors hover:bg-emerald-500"
+                      disabled={isStartingWork}
+                      className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-black text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-70"
                     >
                       <Play className="h-4 w-4 fill-current" />
-                      Mulai Mengerjakan
+                      {isStartingWork ? "Memulai..." : "Mulai Mengerjakan"}
                     </button>
                   </motion.div>
                 </motion.div>

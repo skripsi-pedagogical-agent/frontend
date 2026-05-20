@@ -28,7 +28,7 @@ export async function logTelemetry(
   if (response.status === 401 && token) {
     const newToken = await refreshAccessToken();
     if (newToken) {
-      response = await fetch(`${BACKEND_BASE_URL}/api/telemetry/log`, {
+      response = await fetch(`${BACKEND_BASE_URL}/api/telemetry/log/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
