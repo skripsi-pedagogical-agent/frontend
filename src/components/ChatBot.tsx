@@ -337,7 +337,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 </div>
                 <div>
                   <h4 className="text-base font-bold text-slate-900 mb-2">
-                    Aku BamBoost, siap membantu!
+                    Aku Bamboost, siap membantu!
                   </h4>
                   <ul className="text-sm text-emerald-900 space-y-2 font-medium text-left bg-white p-4 rounded-lg border border-emerald-200 inline-block shadow-sm">
                     <li className="flex items-start gap-2">

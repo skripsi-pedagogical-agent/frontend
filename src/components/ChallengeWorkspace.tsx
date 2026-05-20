@@ -251,6 +251,7 @@ export function ChallengeWorkspace({
   const lastCodeLength = useRef(code.length);
   const codeRef = useRef(code);
   const hasUserTypedRef = useRef(false);
+  const monacoEditorRef = useRef<{ setValue: (value: string) => void } | null>(null);
   const latestStatusIdRef = useRef<EditorSessionStatusId>(1);
   const latestSessionIdRef = useRef<string | null>(null);
   const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -323,6 +324,8 @@ export function ChallengeWorkspace({
 
   useEffect(() => {
     setCode(problem.starterCode);
+    codeRef.current = problem.starterCode;
+    monacoEditorRef.current?.setValue(problem.starterCode);
     setSelectedTestCaseId(problem.testCases[0]?.id ?? 0);
     setOutput([]);
     setLastResult(null);
@@ -405,7 +408,9 @@ export function ChallengeWorkspace({
 
         if (!hasUserTypedRef.current && session.code) {
           setCode(session.code);
+          codeRef.current = session.code;
           lastCodeLength.current = session.code.length;
+          monacoEditorRef.current?.setValue(session.code);
         }
       } catch (error) {
         console.error("Failed to load editor session:", error);
@@ -907,7 +912,7 @@ export function ChallengeWorkspace({
     ],
   );
 
-  const handleCodeChange = (newCode: string | undefined) => {
+  const handleCodeChange = useCallback((newCode: string | undefined) => {
     if (newCode === undefined || !isWorkStarted || isInteractionLocked) return;
 
     hasUserTypedRef.current = true;
@@ -927,7 +932,11 @@ export function ChallengeWorkspace({
       setAgentState("idle");
       setAgentMessage(null);
     }
-  };
+  }, [isWorkStarted, isInteractionLocked, agentState, agentMessage]);
+
+  const handleEditorMount = useCallback((editor: { setValue: (value: string) => void }) => {
+    monacoEditorRef.current = editor;
+  }, []);
 
   const runCode = (
     testCaseInput?: string,
@@ -1047,6 +1056,8 @@ export function ChallengeWorkspace({
           setErrorCount((prev) => prev + 1);
         } finally {
           setIsRunning(false);
+          setSubmitIdleTime(0);
+          lastIdleTriggerTimeRef.current = 0;
         }
       })();
 
@@ -1921,8 +1932,9 @@ export function ChallengeWorkspace({
 
           <div className="flex-1 relative min-h-0">
             <CodeEditor
-              code={code}
+              defaultValue={problem.starterCode}
               onChange={handleCodeChange}
+              onMount={handleEditorMount}
               readOnly={!isWorkStarted || isInteractionLocked}
             />
             <AnimatePresence>
