@@ -262,6 +262,8 @@ export function ChallengeWorkspace({
   const hasGreetedRef = useRef(false);
   const timeTakenRef = useRef(0);
   const isWorkStartedRef = useRef(false);
+  const assistantPanelRef = useRef<HTMLDivElement | null>(null);
+  const [chatScrollSignal, setChatScrollSignal] = useState(0);
   const currentUserId = getStoredAuthUser()?.id ?? "anonymous";
   const tutorialStorageKey = `${TUTORIAL_STORAGE_PREFIX}:${currentUserId}:${problem.id}`;
 
@@ -869,7 +871,22 @@ export function ChallengeWorkspace({
         setChatMessages((prev) => [...prev, newMessage]);
         setIsChatOpen(true);
         setHasClickedMascot(true);
+        // bump scroll signal so ChatBot scrolls to bottom when message arrives
+        setTimeout(() => setChatScrollSignal((s) => s + 1), 120);
         setAgentState("talking");
+        // Ensure assistant panel is scrolled so the newly added proactive message is visible
+        setTimeout(() => {
+          try {
+            if (assistantPanelRef.current) {
+              assistantPanelRef.current.scrollTo({
+                top: assistantPanelRef.current.scrollHeight,
+                behavior: "smooth",
+              });
+            }
+          } catch (err) {
+            // ignore
+          }
+        }, 120);
       } catch {
         setAgentState("sad");
         setAgentMessage("Hint otomatis gagal dikirim. Coba tanya via chat.");
@@ -2292,6 +2309,7 @@ export function ChallengeWorkspace({
           layout
           transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
           style={{ width: assistantPanelWidth }}
+          ref={assistantPanelRef}
           className="flex flex-col bg-white overflow-hidden shrink-0"
         >
           <AnimatePresence mode="wait" initial={false}>
@@ -2316,6 +2334,7 @@ export function ChallengeWorkspace({
                   setIsMinimized={setIsMinimized}
                   isExpanded={isExpanded}
                   setIsExpanded={setIsExpanded}
+                  scrollSignal={chatScrollSignal}
                   agentState={displayAgentState}
                   helpCheckInType={helpCheckInType}
                   stuckHelpNoReasons={stuckHelpNoReasons}
@@ -2487,7 +2506,7 @@ export function ChallengeWorkspace({
                             )}
                           >
                             <div className="text-sm font-semibold text-emerald-950 leading-relaxed [&_p]:font-semibold [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_code]:bg-emerald-100 [&_code]:text-emerald-800 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs pr-5">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                                 {agentMessage ?? ""}
                               </ReactMarkdown>
                             </div>
