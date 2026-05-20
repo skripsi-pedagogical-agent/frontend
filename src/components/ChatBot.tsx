@@ -19,7 +19,13 @@ import "katex/dist/katex.min.css";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
-const MarkdownComponents: Components = {
+const blockCopyHandlers = {
+  onCopy: (event: React.ClipboardEvent<HTMLElement>) => event.preventDefault(),
+  onCut: (event: React.ClipboardEvent<HTMLElement>) => event.preventDefault(),
+  onDragStart: (event: React.DragEvent<HTMLElement>) => event.preventDefault(),
+};
+
+const createMarkdownComponents = (disableCodeBlockCopy = false): Components => ({
   table({ children, ...props }) {
     return (
       <div className="overflow-x-auto my-2">
@@ -54,9 +60,21 @@ const MarkdownComponents: Components = {
   },
   code({ node, inline, className, children, ...props }: any) {
     const match = /language-(\w+)/.exec(className || "");
-    return !inline && match ? (
+    const codeText = String(children);
+    const isCodeBlock = !inline && (Boolean(match) || codeText.includes("\n"));
+    const codeBlockLockProps = disableCodeBlockCopy
+      ? {
+          ...blockCopyHandlers,
+          onContextMenu: (event: React.MouseEvent<HTMLElement>) =>
+            event.preventDefault(),
+          "aria-label": "Code block tidak dapat disalin",
+        }
+      : {};
+
+    return isCodeBlock && match ? (
       <SyntaxHighlighter
         {...props}
+        {...codeBlockLockProps}
         style={vscDarkPlus as any}
         language={match[1]}
         PreTag="div"
@@ -67,11 +85,33 @@ const MarkdownComponents: Components = {
           borderRadius: "0.75rem",
           margin: "0.5rem 0",
           fontSize: "0.85rem",
+          userSelect: disableCodeBlockCopy ? "none" : undefined,
+          WebkitUserSelect: disableCodeBlockCopy ? "none" : undefined,
+          MozUserSelect: disableCodeBlockCopy ? "none" : undefined,
+          msUserSelect: disableCodeBlockCopy ? "none" : undefined,
         }}
-        className="rounded-xl shadow-sm"
+        className={cn("rounded-xl shadow-sm", disableCodeBlockCopy && "select-none")}
       >
-        {String(children).replace(/\n$/, "")}
+        {codeText.replace(/\n$/, "")}
       </SyntaxHighlighter>
+    ) : isCodeBlock && disableCodeBlockCopy ? (
+      <pre
+        {...codeBlockLockProps}
+        className="my-2 overflow-x-auto rounded-xl border border-emerald-200 bg-emerald-950 p-3 text-xs text-emerald-50 shadow-sm select-none"
+        style={{
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          MozUserSelect: "none",
+          msUserSelect: "none",
+        }}
+      >
+        <code
+          {...props}
+          className={cn(className, "font-mono whitespace-pre-wrap break-words select-none")}
+        >
+          {children}
+        </code>
+      </pre>
     ) : (
       <code
         {...props}
@@ -84,7 +124,10 @@ const MarkdownComponents: Components = {
       </code>
     );
   },
-};
+});
+
+const MarkdownComponents = createMarkdownComponents();
+const AssistantMarkdownComponents = createMarkdownComponents(true);
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -432,7 +475,11 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     )}
                   >
                     <ReactMarkdown
-                      components={MarkdownComponents}
+                      components={
+                        msg.role === "assistant"
+                          ? AssistantMarkdownComponents
+                          : MarkdownComponents
+                      }
                       remarkPlugins={[remarkGfm, remarkMath]}
                       rehypePlugins={[rehypeKatex]}
                     >
