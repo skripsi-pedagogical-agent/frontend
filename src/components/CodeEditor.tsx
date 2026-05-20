@@ -1,17 +1,21 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import Editor, { type Monaco } from "@monaco-editor/react";
+import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { PYTHON_BUILTINS } from "@/src/lib/pythonCompletions";
 
+type EditorInstance = Parameters<OnMount>[0];
+
 interface CodeEditorProps {
-  code: string;
+  defaultValue: string;
   onChange: (value: string | undefined) => void;
+  onMount?: (editor: EditorInstance) => void;
   language?: string;
   readOnly?: boolean;
 }
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({
-  code,
+export const CodeEditor: React.FC<CodeEditorProps> = React.memo(({
+  defaultValue,
   onChange,
+  onMount,
   language = "python",
   readOnly = false,
 }) => {
@@ -23,36 +27,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
       completionProviderRef.current =
         monaco.languages.registerCompletionItemProvider(language, {
-          triggerCharacters: [
-            ".",
-            "_",
-            "a",
-            "b",
-            "c",
-            "d",
-            "e",
-            "f",
-            "g",
-            "h",
-            "i",
-            "j",
-            "k",
-            "l",
-            "m",
-            "n",
-            "o",
-            "p",
-            "q",
-            "r",
-            "s",
-            "t",
-            "u",
-            "v",
-            "w",
-            "x",
-            "y",
-            "z",
-          ],
+          triggerCharacters: [".", "_"],
           provideCompletionItems(model, position) {
             const word = model.getWordUntilPosition(position);
             const prefix = word.word.toLowerCase();
@@ -63,7 +38,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
               endColumn: word.endColumn,
             };
 
-            // Filter suggestions from PYTHON_BUILTINS based on prefix
             const filtered = PYTHON_BUILTINS.filter((item) =>
               item.label.toLowerCase().startsWith(prefix),
             ).map((item) => ({
@@ -71,9 +45,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
               range,
             }));
 
-            return {
-              suggestions: filtered,
-            };
+            return { suggestions: filtered };
           },
         });
     },
@@ -110,6 +82,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     });
   }, [registerCompletionProvider]);
 
+  const handleMount = useCallback<OnMount>((editor) => {
+    onMount?.(editor);
+  }, [onMount]);
+
   return (
     <div
       className="w-full h-full overflow-hidden shadow-sm bg-[#0a1a10]"
@@ -119,8 +95,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         height="100%"
         defaultLanguage={language}
         beforeMount={defineTheme}
-        value={code}
+        defaultValue={defaultValue}
         onChange={onChange}
+        onMount={handleMount}
         theme="emerald-dark"
         options={{
           minimap: { enabled: false },
@@ -146,4 +123,4 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       />
     </div>
   );
-};
+});
