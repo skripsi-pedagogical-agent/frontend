@@ -13,6 +13,9 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
@@ -131,6 +134,8 @@ interface ChatBotProps {
   embedded?: boolean;
   isExpanded?: boolean;
   setIsExpanded?: (expanded: boolean) => void;
+  // external signal to force-scroll messages to bottom (increment to trigger)
+  scrollSignal?: number;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -154,10 +159,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   embedded = false,
   isExpanded = false,
   setIsExpanded = () => {},
+  scrollSignal = 0,
 }) => {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const helpCheckRef = useRef<HTMLDivElement | null>(null);
 
   // FIX: Dynamic textarea height
   useEffect(() => {
@@ -172,6 +179,43 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isTyping, isOpen, isMinimized, isExpanded]);
+
+  // External signal: when parent increments `scrollSignal`, force scroll-to-bottom
+  useEffect(() => {
+    // Try scrolling multiple times with backoff to handle mount/layout timing.
+    const attempts = [60, 140, 300, 600];
+    attempts.forEach((delay, i) => {
+      setTimeout(() => {
+        try {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+          if (textareaRef.current) {
+            textareaRef.current.focus({ preventScroll: true });
+          }
+        } catch (err) {
+          // ignore
+        }
+      }, delay);
+    });
+  }, [scrollSignal]);
+
+  // When the help check-in appears, ensure it's visible and focus input
+  useEffect(() => {
+    if (helpCheckInType !== null && helpCheckRef.current) {
+      // multiple attempts for layout stability
+      [40, 120, 320].forEach((d) =>
+        setTimeout(() => {
+          try {
+            helpCheckRef.current!.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (textareaRef.current) textareaRef.current.focus({ preventScroll: true });
+          } catch (e) {
+            // ignore
+          }
+        }, d),
+      );
+    }
+  }, [helpCheckInType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,7 +433,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                   >
                     <ReactMarkdown
                       components={MarkdownComponents}
-                      remarkPlugins={[remarkGfm]}
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
                     >
                       {msg.content}
                     </ReactMarkdown>
@@ -406,7 +451,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
             {/* Proactive Help Check-in */}
             {helpCheckInType !== null && (
-              <div className="space-y-4 pt-4 border-t border-emerald-200/50">
+                <div ref={helpCheckRef} className="space-y-4 pt-4 border-t border-emerald-200/50">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left relative overflow-hidden">
                   {onDismissHelpCheckIn && (
                     <button
@@ -451,6 +496,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                 </div>
               </div>
             )}
+
+            
 
             {/* Typing Indicator */}
             {isTyping && (
